@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+# Defines how slowly 'send -h' will type
+set send_human {.01 .1 10 .05 1}
+
+# Parameters
+set local_port	[lindex $argv 0]
+set gate_ip	[lindex $argv 1]
+set gate_user	[lindex $argv 2]
+set gate_pw	[lindex $argv 3]
+set remote_ip	[lindex $argv 4]
+set remote_port	[lindex $argv 5]
+
+#TODO: turn logging off
+spawn bash port-forward.sh $local_port $gate_ip $gate_user $remote_ip $remote_port
+expect -nocase "password: "
+# handle ssh-key
+#sleep 1
+send -h "$gate_pw\r"
+expect -nocase "last login:"
