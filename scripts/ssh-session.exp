@@ -1,0 +1,21 @@
+#!/usr/bin/expect -f
+# Defines how slowly 'send -h' will type
+set send_human {.01 .1 10 .05 1}
+
+# Parameters (all remote)
+set user	[lindex $argv 0]
+set ip		[lindex $argv 1]
+set port	[lindex $argv 2]
+set password	[lindex $argv 3]
+set commands	[lindex $argv 4]
+
+#TODO: turn logging off
+spawn bash tunnel-ssh.sh $user $ip $port "$commands"
+expect -nocase "password: "
+# handle ssh-key
+#sleep 1
+send -h "$password\r"
+expect -nocase "last login:"
+#send -- "ls -la\r"
+#spawn bash tunnel-ssh-enum.sh
+#DBG not sending 
