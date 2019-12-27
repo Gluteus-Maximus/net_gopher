@@ -50,7 +50,21 @@ def ssh_session_loop(sshParams, credLst, gateCreds, ):
 
 
 def ssh_session(user, ip, port, password, commands):
-  pass
+  print("DBG: {}".format(commands))
+  retval = sp.run(
+      "expect {} {} {} {} {} {}".format(
+        sshScriptPath,
+        user,
+        ip,
+        port,
+        password,
+        '"{}"'.format(commands)
+        ),
+      shell=True,
+      stdout=sp.PIPE,
+      stderr=sp.PIPE)
+  #TODO: check retval.returncode, log failure
+  return retval
 
 
 def scp_session_loop():
