@@ -9,7 +9,7 @@ set port	[lindex $argv 2]
 set password	[lindex $argv 3]
 set commands	[lindex $argv 4]
 set begin_msg	"### COMMAND EXECUTION BEGIN ###"
-set done_msg	"### COMMAND EXECUTION DONE ###"
+set done_msg	"### COMMAND EXECUTION COMPLETE ###"
 
 #TODO: turn logging off
 set script_dir	[file normalize [file dirname $argv0]]
