@@ -71,6 +71,25 @@ def scp_session_loop():
   pass
 
 
+def scp_session():
+  '''
+  retval = sp.run(
+      "expect {} {} {} {} {} {}".format(
+        scpScriptPath,
+        ,
+        ,
+        ,
+        ,
+        ,
+        ),
+      shell=True,
+      stdout=sp.PIPE,
+      stderr=sp.PIPE)
+  #TODO: check retval.returncode, log failure
+  '''
+  pass
+
+
 def log_session_data_raw(ip, data, logfile):
   pass
 
