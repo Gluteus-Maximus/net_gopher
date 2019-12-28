@@ -39,11 +39,26 @@ def parse_creds(credFile):
   return credLst
 
 
-def format_ssh_commands(cmdStr, formatters):
+def format_commands(commandStr, formatters):
+  '''
+  @params:
+    commandsLst: command string to be formatted.
+    formatters: dictionary of formatters to apply to commands string.
+      * Keys must match between commandStr and formatters
+  '''
+  return commandStr.format(**formatters)
   pass
 
 
-def port_forward(local_port, gate_ip, gate_user, gate_pw, remote_ip, remote_port):
+def join_commands(commandsLst):
+  commands = ";".join(commandsLst)
+  commands = re.sub("\s*;\s*", ";", commands)
+  commands = re.sub(";+", ";", commands).strip(";")
+  return commands
+
+
+def port_forward(local_port, gate_ip, gate_user, gate_pw,
+        remote_ip, remote_port):
   retval = sp.run(
       "expect {} {} {} {} {} {} {}".format(
         forwarderScriptPath,
