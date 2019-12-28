@@ -76,12 +76,39 @@ def port_forward(local_port, gate_ip, gate_user, gate_pw,
   return retval
 
 
-def ssh_session_loop(sshParams, credLst, gateCreds, ):
+def tunneled_ssh_loop(localPort, credLst, gateCreds, commandStr,
+      outputFilepath, errlogFilepath):
+  '''
+  @params:
+    credLst: nested list of endpoint creds.
+    gateCreds: Credentials object for ssh tunnel gateway.
+  '''
+  for remoteIP, remotePort, remoteUser, remotePassword in credLst:
+    #TODO: store/delete forwarder socket
+    #TODO: check if localport in use, kill process/block until open
+    forwardRetval = port_forward(
+        localPort,
+        gateCreds.ip,
+        gateCreds.user,
+        gateCreds.password,
+        remoteIP,
+        remotePort
+        )
+    sshRetval = ssh_session(
+        remoteUser,
+        "localhost",
+        localPort,
+        remotePassword,
+        commandStr
+        )
+    print(sshRetval.stdout.decode('utf-8'))  #TODO DBG
+    sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO DBG
+    #TODO: log return data
   pass
 
 
-def ssh_session(user, ip, port, password, commands):
-  print("DBG: {}".format(commands))
+def ssh_session(user, ip, port, password, commandStr):
+  #print("DBG: {}".format(commands))
   retval = sp.run(
       "expect {} {} {} {} {} {}".format(
         sshScriptPath,
@@ -89,7 +116,7 @@ def ssh_session(user, ip, port, password, commands):
         ip,
         port,
         password,
-        '"{}"'.format(commands)
+        '"{}"'.format(commandStr)
         ),
       shell=True,
       stdout=sp.PIPE,
@@ -98,7 +125,7 @@ def ssh_session(user, ip, port, password, commands):
   return retval
 
 
-def scp_session_loop():
+def tunneled_scp_loop():
   pass
 
 
