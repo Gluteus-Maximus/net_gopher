@@ -30,7 +30,13 @@ def getargs():
 
 
 def parse_creds(credFile):
-  pass
+  credLst = list()
+  with open(credFile) as fp:
+    csvLines = [line for line in fp.readlines() if not line.startswith("#")]
+    reader = csv.reader(csvLines)
+    for cred in reader:
+      credLst.append(cred)
+  return credLst
 
 
 def format_ssh_commands(cmdStr, formatters):
