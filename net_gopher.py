@@ -4,6 +4,9 @@ For Nix Systems Only.
 '''
 import os
 import pathlib
+import re
+import time
+import csv
 import subprocess as sp
 
 #TODO: capture output from scripts
@@ -13,6 +16,13 @@ scriptsDir = os.path.join(fileDir, "scripts/")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
+
+
+class Credentials():
+  def __init__(self, ip, user, password):
+    self.ip = ip
+    self.user = user
+    self.password = password
 
 
 def getargs():
