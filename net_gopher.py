@@ -11,6 +11,7 @@ import subprocess as sp
 
 #TODO: capture output from scripts
 
+# Global Script Filepaths
 fileDir = os.path.dirname(os.path.realpath(__file__))
 scriptsDir = os.path.join(fileDir, "scripts/")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
@@ -26,17 +27,29 @@ class Credentials():
 
 
 def getargs():
+  #TODO: how to allow multiple of a flag?
+  #d = defaults.copy()
+  #d.update(os.environ)
+  #d.update(command_line_args)
+  #ChainMap
   pass
 
 
-def parse_creds(credFile):
-  credLst = list()
-  with open(credFile) as fp:
+def parse_csv(csvFile):
+  #TODO: include expected csv format (incl. header) in docs
+  csvLst = list()
+  with open(csvFile) as fp:
+    # skip commented (#) lines
     csvLines = [line for line in fp.readlines() if not line.startswith("#")]
+    #TODO: read one line at a time?? how to
     reader = csv.reader(csvLines)
-    for cred in reader:
-      credLst.append(cred)
-  return credLst
+    next(reader)  # skip header
+  return reader
+  '''
+    for values in reader:
+      csvLst.append(values)
+  return csvLst
+  '''
 
 
 def format_commands(commandStr, formatters):
@@ -52,8 +65,8 @@ def format_commands(commandStr, formatters):
 
 def join_commands(commandsLst):
   commands = ";".join(commandsLst)
-  commands = re.sub("\s*;\s*", ";", commands)
-  commands = re.sub(";+", ";", commands).strip(";")
+  commands = re.sub("\s*;\s*", ";", commands)  # strip w/s around ';'
+  commands = re.sub(";+", ";", commands).strip(";")  # fix repeated ';'
   return commands
 
 
@@ -77,7 +90,7 @@ def port_forward(local_port, gate_ip, gate_user, gate_pw,
 
 
 def tunneled_ssh_loop(localPort, credLst, gateCreds, commandStr,
-      outputFilepath, errlogFilepath):
+      outputFilepath, errlogFilepath):  #TODO: add jsonFilepath
   '''
   @params:
     credLst: nested list of endpoint creds.
