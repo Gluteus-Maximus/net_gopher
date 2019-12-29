@@ -62,35 +62,35 @@ class readable_dir(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     prospective_dir=values
     if not os.path.isdir(prospective_dir):
-      raise ap.ArgumentTypeError("error: {0} is not a valid path".format(prospective_dir))
+      raise ap.ArgumentError(self, "{0} is not a valid path".format(prospective_dir))
     if os.access(prospective_dir, os.R_OK):
       setattr(namespace,self.dest,prospective_dir)
     else:
-      raise ap.ArgumentTypeError("error: {0} is not a readable dir".format(prospective_dir))
+      raise ap.ArgumentError(self, "{0} is not a readable dir".format(prospective_dir))
 
 
 class readable_file(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     prospective_file=values
     if not os.path.isfile(prospective_file):
-      raise ap.ArgumentTypeError("error: {0} is not a valid file".format(prospective_file))
+      raise ap.ArgumentError(self, "{0} is not a valid file".format(prospective_file))
     if os.access(prospective_file, os.R_OK):
       setattr(namespace,self.dest,prospective_file)
     else:
-      raise ap.ArgumentTypeError("error: {0} is not a readable file".format(prospective_file))
+      raise ap.ArgumentError(self, "{0} is not a readable file".format(prospective_file))
 
 
 class readable_file_append(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     prospective_file=values
     if not os.path.isfile(prospective_file):
-      raise ap.ArgumentTypeError("error: {0} is not a valid file".format(prospective_file))
+      raise ap.ArgumentError(self, "{0} is not a valid file".format(prospective_file))
     if os.access(prospective_file, os.R_OK):
       items = _copy.copy(_ensure_value(namespace, self.dest, []))
       items.append(prospective_file)
       setattr(namespace, self.dest, items)
     else:
-      raise ap.ArgumentTypeError("error: {0} is not a readable file".format(prospective_file))
+      raise ap.ArgumentError(self, "{0} is not a readable file".format(prospective_file))
 
 
 def _ensure_value(namespace, name, value):
