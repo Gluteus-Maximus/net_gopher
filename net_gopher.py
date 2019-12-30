@@ -41,56 +41,59 @@ def getargs():
   #d.update(command_line_args)
   #ChainMap
   parser = ap.ArgumentParser()  #TODO: add desc
-  parser.add_argument('-r', '--remoteCreds', action=readable_file, required=True)
-  parser.add_argument('-b', '--bashScript', dest='bashScripts',
-      action=readable_file_append, required=True)
-  parser.add_argument('--test', type=int, required=True)
-  #parser.add_argument('', required=True)
-  #parser.add_argument('', required=True)
+  parser.add_argument('-g', '--gateCreds', action=_readable_file, required=True)
+  parser.add_argument('-r', '--remoteCreds', action=_readable_file, required=True)
+  parser.add_argument('-o', '--outputDir', action=_readable_dir, required=True)
+  parser.add_argument('-b', '--bashScript', dest='bashScripts', nargs='+',
+      action=_readable_file_append, required=False)
+  parser.add_argument('-f', '--scpFiles', action=_readable_file, required=False)
+  # adds fromDate and minusDays formatters
+  parser.add_argument('-d', '--fromDate', action='append',
+      metavar='DATE', dest='formatters', required=False) #type=dateFormatter
+  parser.add_argument('-F', '--formatter', nargs=2, action='append',
+      metavar=('KEY', 'VALUE'), dest='formatters', required=False) #type=dict
   #TODO: get gate password securely? file with permission restrictions?
   #TODO: support non-standard key formatters (-f nargs=2 key,value - append to formatters)
   #TODO: default values for standard key formatters
-  try:
-    return parser.parse_args()
-  except ap.ArgumentTypeError as e:
-    #TODO: print usage
-    print(e, file=sys.stderr)
-    exit(1)
+  return parser.parse_args()
 
 
-class readable_dir(ap.Action):
+class _readable_dir(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
-    prospective_dir=values
-    if not os.path.isdir(prospective_dir):
-      raise ap.ArgumentError(self, "{0} is not a valid path".format(prospective_dir))
-    if os.access(prospective_dir, os.R_OK):
-      setattr(namespace,self.dest,prospective_dir)
+    if not os.path.isdir(values):
+      raise ap.ArgumentError(self, "{0} is not a valid path".format(values))
+    if os.access(values, os.R_OK):
+      setattr(namespace,self.dest,values)
     else:
-      raise ap.ArgumentError(self, "{0} is not a readable dir".format(prospective_dir))
+      raise ap.ArgumentError(self, "{0} is not a readable dir".format(values))
 
 
-class readable_file(ap.Action):
+class _readable_file(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
-    prospective_file=values
-    if not os.path.isfile(prospective_file):
-      raise ap.ArgumentError(self, "{0} is not a valid file".format(prospective_file))
-    if os.access(prospective_file, os.R_OK):
-      setattr(namespace,self.dest,prospective_file)
+    if not os.path.isfile(values):
+      raise ap.ArgumentError(self, "{0} is not a valid file".format(values))
+    if os.access(values, os.R_OK):
+      setattr(namespace,self.dest,values)
     else:
-      raise ap.ArgumentError(self, "{0} is not a readable file".format(prospective_file))
+      raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
 
 
-class readable_file_append(ap.Action):
+class _readable_file_append(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
-    prospective_file=values
-    if not os.path.isfile(prospective_file):
-      raise ap.ArgumentError(self, "{0} is not a valid file".format(prospective_file))
-    if os.access(prospective_file, os.R_OK):
-      items = _copy.copy(_ensure_value(namespace, self.dest, []))
-      items.append(prospective_file)
-      setattr(namespace, self.dest, items)
+    def _check_append(self, parser, namespace, values, option_string=None):
+      if not os.path.isfile(values):
+        raise ap.ArgumentError(self, "{0} is not a valid file".format(values))
+      if os.access(values, os.R_OK):
+        items = _copy.copy(_ensure_value(namespace, self.dest, []))
+        items.append(values)
+        setattr(namespace, self.dest, items)
+      else:
+        raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
+    if isinstance(values, list):
+      for item in values:
+        _check_append(self, parser, namespace, item, option_string=None)
     else:
-      raise ap.ArgumentError(self, "{0} is not a readable file".format(prospective_file))
+      _check_append(self, parser, namespace, values, option_string=None)
 
 
 def _ensure_value(namespace, name, value):
@@ -99,8 +102,14 @@ def _ensure_value(namespace, name, value):
     return getattr(namespace, name)
 
 
-def parse_csv(csvFile):
+def load_csv(csvFile):
   #TODO: include expected csv format (incl. header) in docs
+  ''' # Doesn't skip comment lines
+  with open(csvFile) as fp:
+    reader = csv.reader(fp)
+    next(reader)  # skip header
+  return reader
+  '''
   csvLst = list()
   with open(csvFile) as fp:
     # skip commented (#) lines
@@ -109,11 +118,6 @@ def parse_csv(csvFile):
     reader = csv.reader(csvLines)
     next(reader)  # skip header
   return reader
-  '''
-    for values in reader:
-      csvLst.append(values)
-  return csvLst
-  '''
 
 
 def format_commands(commandStr, formatters):
@@ -123,8 +127,10 @@ def format_commands(commandStr, formatters):
     formatters: dictionary of formatters to apply to commands string.
       * Keys must match between commandStr and formatters
   '''
-  return commandStr.format(**formatters)
-  pass
+  try:
+    return commandStr.format(**formatters)
+  except KeyError as e:
+    raise e  #TODO: write error mssg
 
 
 def join_commands(commandsLst):
