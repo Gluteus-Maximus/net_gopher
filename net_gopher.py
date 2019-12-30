@@ -32,7 +32,17 @@ class Credentials():
 def main():
   args = getargs()
   print(args)
-
+  try:
+    if args.bashScripts:
+      commands = list()
+      for filepath in args.bashScripts:
+        with open(args.bashScripts) as fp:
+          commands.append(fp.read_lines())
+      commands = format_commands(join_commands(commands), args.formatters)
+      # ssh loop
+    if args.scpFiles:
+      scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
+      # scp loop
 
 def getargs():
   #TODO: how to allow multiple of a flag?
@@ -44,6 +54,7 @@ def getargs():
   parser.add_argument('-g', '--gateCreds', action=_readable_file, required=True)
   parser.add_argument('-r', '--remoteCreds', action=_readable_file, required=True)
   parser.add_argument('-o', '--outputDir', action=_readable_dir, required=True)
+  #parser.add_argument('-j', '--jsonFile', action=_readable_file, required=True)
   parser.add_argument('-b', '--bashScript', dest='bashScripts', nargs='+',
       action=_readable_file_append, required=False)
   parser.add_argument('-f', '--scpFiles', action=_readable_file, required=False)
@@ -127,6 +138,8 @@ def format_commands(commandStr, formatters):
     formatters: dictionary of formatters to apply to commands string.
       * Keys must match between commandStr and formatters
   '''
+  if formatters is None:
+    return commandStr
   try:
     return commandStr.format(**formatters)
   except KeyError as e:
@@ -185,7 +198,7 @@ def tunneled_ssh_loop(localPort, credLst, gateCreds, commandStr,
         commandStr
         )
     print(sshRetval.stdout.decode('utf-8'))  #TODO DBG
-    sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO DBG
+    sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO: better tunnel closer
     #TODO: log return data
   pass
 
