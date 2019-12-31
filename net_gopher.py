@@ -22,6 +22,10 @@ sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
 
 
+__all__ = [
+    ]
+
+
 class Credentials():
   def __init__(self, ip, user, password):
     self.ip = ip
@@ -30,7 +34,7 @@ class Credentials():
 
 
 def main():
-  args = getargs()
+  args = get_args()
   print(args)
   try:
     if args.bashScripts:
@@ -43,8 +47,10 @@ def main():
     if args.scpFiles:
       scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
       # scp loop
+  except Exception as e:
+    print(e, file=sys.stderr)  #TODO DBG
 
-def getargs():
+def get_args():
   #TODO: how to allow multiple of a flag?
   #d = defaults.copy()
   #d.update(os.environ)
@@ -60,15 +66,18 @@ def getargs():
   parser.add_argument('-f', '--scpFiles', action=_readable_file, required=False)
   # adds fromDate and minusDays formatters
   parser.add_argument('-d', '--fromDate', action='append',
-      metavar='DATE', dest='formatters', required=False) #type=dateFormatter
+      metavar='DATE', dest='formatters', required=False, type=_date_formatter,
+      help="###fromDate help, builtin formatter. converts, keys X/Y.")
   parser.add_argument('-F', '--formatter', nargs=2, action='append',
-      metavar=('KEY', 'VALUE'), dest='formatters', required=False) #type=dict
+      metavar=('KEY', 'VALUE'), dest='formatters', required=False, #type=Formatter
+      help="###formatter help")
   #TODO: get gate password securely? file with permission restrictions?
   #TODO: support non-standard key formatters (-f nargs=2 key,value - append to formatters)
   #TODO: default values for standard key formatters
   return parser.parse_args()
 
 
+#TODO: make type
 class _readable_dir(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     if not os.path.isdir(values):
@@ -79,6 +88,7 @@ class _readable_dir(ap.Action):
       raise ap.ArgumentError(self, "{0} is not a readable dir".format(values))
 
 
+#TODO: make type
 class _readable_file(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     if not os.path.isfile(values):
@@ -88,7 +98,7 @@ class _readable_file(ap.Action):
     else:
       raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
 
-
+#TODO: make type
 class _readable_file_append(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     def _check_append(self, parser, namespace, values, option_string=None):
@@ -107,10 +117,63 @@ class _readable_file_append(ap.Action):
       _check_append(self, parser, namespace, values, option_string=None)
 
 
+def _store_key_pairs_factory(separator):
+  class _store_key_pairs(argparse.Action):
+    '''
+    @func: Takes key value pairs (separated by 'separator') and updates dict 'dest'
+    '''
+    #TODO: raise ArgumentError if dest is not dict
+    def __init__(self, option_strings, dest, nargs=None, **kwargs):
+      self._nargs = nargs
+      super(_store_key_pairs, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
+    def __call__(self, parser, namespace, values, option_string=None):
+      print(values, file=sys.stderr)
+      if isinstance(getattr(namespace, self.dest), dict):
+        my_dict = getattr(namespace, self.dest)
+        print("DBG: is dict")
+      else:
+        my_dict = {}
+        print("DBG: not a dict")
+      for kv in values:
+        k,v = kv.split(separator)
+        my_dict[k] = v
+      setattr(namespace, self.dest, my_dict)
+  return _store_key_pairs
+
+
+class _update_dict(argparse.Action):
+  '''
+  @func: Takes dict 'values' and updates dict 'dest'
+  '''
+  #TODO: raise ArgumentError if dest or value are not dict
+  def __init__(self, option_strings, dest, nargs=None, **kwargs):
+    self._nargs = nargs
+    super(StoreDictKeyPair, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
+  def __call__(self, parser, namespace, values, option_string=None):
+    my_dict = {}
+    print "values: {}".format(values)
+    for kv in values:
+      k,v = kv.split("=")
+      my_dict[k] = v
+    setattr(namespace, self.dest, my_dict)
+
+
 def _ensure_value(namespace, name, value):
     if getattr(namespace, name, None) is None:
         setattr(namespace, name, value)
     return getattr(namespace, name)
+
+
+def _date_formatter(dateStr):
+  pass
+
+
+def _formatter(keyValPair):
+  pass
+
+
+#TODO: dateFormatter type
+#TODO: formatter type
 
 
 def load_csv(csvFile):
