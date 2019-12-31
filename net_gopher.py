@@ -36,19 +36,20 @@ class Credentials():
 def main():
   args = get_args()
   print(args)
-  try:
-    if args.bashScripts:
-      commands = list()
-      for filepath in args.bashScripts:
-        with open(args.bashScripts) as fp:
-          commands.append(fp.read_lines())
-      commands = format_commands(join_commands(commands), args.formatters)
-      # ssh loop
-    if args.scpFiles:
-      scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
-      # scp loop
-  except Exception as e:
-    print(e, file=sys.stderr)  #TODO DBG
+  #try:
+  if args.bashScripts:
+    commands = list()
+    for filepath in args.bashScripts:
+      with open(filepath) as fp:
+        commands.extend(fp.readlines())
+    commands = format_commands(join_commands(commands), args.formatters)
+    print(commands)  #TODO DBG
+    # ssh loop
+  if args.scpFiles:
+    scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
+    # scp loop
+  #except Exception as e:
+  #  print("ERROR: {}".format(e), file=sys.stderr)  #TODO DBG
 
 def get_args():
   #TODO: how to allow multiple of a flag?
@@ -68,8 +69,9 @@ def get_args():
   parser.add_argument('-d', '--fromDate', action='append',
       metavar='DATE', dest='formatters', required=False, type=_date_formatter,
       help="###fromDate help, builtin formatter. converts, keys X/Y.")
-  parser.add_argument('-F', '--formatter', nargs=2, action='append',
-      metavar=('KEY', 'VALUE'), dest='formatters', required=False, #type=Formatter
+  parser.add_argument('-F', '--formatter', nargs=2, required=False,
+      metavar=('KEY', 'VALUE'), dest='formatters',
+      type=str, action=_update_dict_nargs,
       help="###formatter help")
   #TODO: get gate password securely? file with permission restrictions?
   #TODO: support non-standard key formatters (-f nargs=2 key,value - append to formatters)
@@ -117,8 +119,14 @@ class _readable_file_append(ap.Action):
       _check_append(self, parser, namespace, values, option_string=None)
 
 
+def _ensure_value(namespace, name, value):
+    if getattr(namespace, name, None) is None:
+        setattr(namespace, name, value)
+    return getattr(namespace, name)
+
+
 def _store_key_pairs_factory(separator):
-  class _store_key_pairs(argparse.Action):
+  class _store_key_pairs(ap.Action):
     '''
     @func: Takes key value pairs (separated by 'separator') and updates dict 'dest'
     '''
@@ -127,13 +135,10 @@ def _store_key_pairs_factory(separator):
       self._nargs = nargs
       super(_store_key_pairs, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
     def __call__(self, parser, namespace, values, option_string=None):
-      print(values, file=sys.stderr)
       if isinstance(getattr(namespace, self.dest), dict):
         my_dict = getattr(namespace, self.dest)
-        print("DBG: is dict")
       else:
         my_dict = {}
-        print("DBG: not a dict")
       for kv in values:
         k,v = kv.split(separator)
         my_dict[k] = v
@@ -141,39 +146,46 @@ def _store_key_pairs_factory(separator):
   return _store_key_pairs
 
 
-class _update_dict(argparse.Action):
+def _key_val_pair(keyValPair):
   '''
-  @func: Takes dict 'values' and updates dict 'dest'
+  @func: Takes key value pair (iterable) and returns dict
+  @param:
+    keyValPair: iterable of at least len 2, key and value(s).
+    - If more than one value is provided (ie len greater than 2), these will
+    - be stored as a list.
   '''
-  #TODO: raise ArgumentError if dest or value are not dict
-  def __init__(self, option_strings, dest, nargs=None, **kwargs):
-    self._nargs = nargs
-    super(StoreDictKeyPair, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
-  def __call__(self, parser, namespace, values, option_string=None):
-    my_dict = {}
-    print "values: {}".format(values)
-    for kv in values:
-      k,v = kv.split("=")
-      my_dict[k] = v
-    setattr(namespace, self.dest, my_dict)
-
-
-def _ensure_value(namespace, name, value):
-    if getattr(namespace, name, None) is None:
-        setattr(namespace, name, value)
-    return getattr(namespace, name)
+  print(keyValPair)
+  if len(keyValPair) < 2:
+    raise ap.ArgumentTypeError(
+        "_key_val_pair: invalid input '{}': input must have at least two indices".format(keyValPair))
+  elif len(keyValPair) == 2:
+    key, value = keyValPair
+  else:
+    key, *value = keyValPair
+  return dict([(key, value)])
 
 
 def _date_formatter(dateStr):
+  #call _key_val_pair
   pass
 
 
-def _formatter(keyValPair):
-  pass
-
-
-#TODO: dateFormatter type
-#TODO: formatter type
+class _update_dict_nargs(ap.Action):
+  #TODO: raise ArgumentError if dest or value are not dict
+  def __init__(self, option_strings, dest, nargs=None, **kwargs):
+    self._nargs = nargs
+    super(_update_dict_nargs, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
+  def __call__(self, parser, namespace, values, option_string=None):
+    '''
+    @func: Takes dict 'values' and updates dict 'namespace.dest'
+    '''
+    # if dest is not a dictionary, held data will be lost
+    if isinstance(getattr(namespace, self.dest), dict):
+      my_dict = getattr(namespace, self.dest)
+    else:
+      my_dict = {}
+    my_dict.update(_key_val_pair(values))
+    setattr(namespace, self.dest, my_dict)
 
 
 def load_csv(csvFile):
