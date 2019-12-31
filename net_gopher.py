@@ -22,6 +22,7 @@ sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
 
 
+#TODO
 __all__ = [
     ]
 
@@ -43,7 +44,7 @@ def main():
       with open(filepath) as fp:
         commands.extend(fp.readlines())
     commands = format_commands(join_commands(commands), args.formatters)
-    print(commands)  #TODO DBG
+    #print(commands)  #TODO DBG
     # ssh loop
   if args.scpFiles:
     scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
@@ -63,7 +64,9 @@ def get_args():
   parser.add_argument('-o', '--outputDir', action=_readable_dir, required=True)
   #parser.add_argument('-j', '--jsonFile', action=_readable_file, required=True)
   parser.add_argument('-b', '--bashScript', dest='bashScripts', nargs='+',
-      action=_readable_file_append, required=False)
+      action=_readable_file_append, required=False,
+      help="###bashScript help -- comments must be on their own line")
+  # comments must be on their own line or no following commands will be run
   parser.add_argument('-f', '--scpFiles', action=_readable_file, required=False)
   # adds fromDate and minusDays formatters
   parser.add_argument('-d', '--fromDate', action='append',
@@ -79,7 +82,6 @@ def get_args():
   return parser.parse_args()
 
 
-#TODO: make type
 class _readable_dir(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     if not os.path.isdir(values):
@@ -90,7 +92,6 @@ class _readable_dir(ap.Action):
       raise ap.ArgumentError(self, "{0} is not a readable dir".format(values))
 
 
-#TODO: make type
 class _readable_file(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     if not os.path.isfile(values):
@@ -100,7 +101,6 @@ class _readable_file(ap.Action):
     else:
       raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
 
-#TODO: make type
 class _readable_file_append(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     def _check_append(self, parser, namespace, values, option_string=None):
@@ -222,7 +222,9 @@ def format_commands(commandStr, formatters):
 
 
 def join_commands(commandsLst):
-  commands = ";".join(commandsLst)
+  # comments must be on their own line or no following commands will be run
+  commands = [cmd for cmd in commandsLst if not cmd.startswith("#")]
+  commands = ";".join(commands)
   commands = re.sub("\s*;\s*", ";", commands)  # strip w/s around ';'
   commands = re.sub(";+", ";", commands).strip(";")  # fix repeated ';'
   return commands
