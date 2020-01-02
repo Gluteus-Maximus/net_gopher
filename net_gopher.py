@@ -16,7 +16,7 @@ import copy as _copy
 
 # Global Filepaths
 fileDir = os.path.dirname(os.path.realpath(__file__))
-scriptsDir = os.path.join(fileDir, "scripts/")
+scriptsDir = os.path.join(fileDir, "expect/")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
@@ -41,9 +41,14 @@ class Credentials():
 
 def main():
   args = get_args()
-  print(args)
+  #print(args) #TODO DBG
   #try:
-  print(next(load_csv(args.gateCreds)))
+  #print(next(load_csv(args.gateCreds)))  #TODO DBG
+  #TODO: mkdir from dtg
+  #TODO: store raw log
+  #TODO: store json
+  #TODO: mkdir for each ip (if scpFiles??)
+  #TODO: store errors
   gateCreds = Credentials(*next(load_csv(args.gateCreds)))
   if args.bashScripts:
     commandStr = ingest_commands(args.bashScripts, args.formatters)
@@ -299,9 +304,8 @@ def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
         remoteIP,
         remotePort
         )
-    print("\nForwarder STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
-        forwardRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nnForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
+    #print("\nForwarder STDOUT:\n", forwardRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
+    #print("\nnForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
     sshRetval = ssh_session(
         remoteUser,
         "localhost",
