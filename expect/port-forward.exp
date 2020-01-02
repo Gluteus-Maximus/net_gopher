@@ -12,12 +12,13 @@ set gate_pw         [lindex $argv 4]
 set remote_ip       [lindex $argv 5]
 set remote_ssh_port [lindex $argv 6]
 
-#TODO: turn logging off
+log_user 0
 # Call bash script as absolute path, relative to this script (same directory)
 set script_dir	[file normalize [file dirname $argv0]]
 spawn bash $script_dir/port-forward.sh $local_port $gate_ip $gate_ssh_port $gate_user $remote_ip $remote_ssh_port
 expect -nocase "password: "
 # handle ssh-key
 send -h "$gate_pw\r"
+log_user 1
 sleep 1
 exit
