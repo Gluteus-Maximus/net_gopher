@@ -12,6 +12,7 @@ set remote_ip	[lindex $argv 4]
 set remote_port	[lindex $argv 5]
 
 #TODO: turn logging off
+# Call bash script as absolute path, relative to this script (same directory)
 set script_dir	[file normalize [file dirname $argv0]]
 spawn bash $script_dir/port-forward.sh $local_port $gate_ip $gate_user $remote_ip $remote_port
 expect -nocase "password: "
