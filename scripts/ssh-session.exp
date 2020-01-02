@@ -4,11 +4,11 @@ set send_human {.01 .1 10 .05 1}
 
 # Parameters (all remote)
 # note: if using port forwarding ip and port should be the entrypoint for the forwarder
-set user	[lindex $argv 0]
-set ip		[lindex $argv 1]
-set port	[lindex $argv 2]
-set password	[lindex $argv 3]
-set commands	[lindex $argv 4]
+set user      [lindex $argv 0]
+set ip        [lindex $argv 1]
+set port      [lindex $argv 2]
+set password  [lindex $argv 3]
+set commands  [lindex $argv 4]
 set begin_msg	"### COMMAND EXECUTION BEGIN ###"
 set done_msg	"### COMMAND EXECUTION COMPLETE ###"
 
@@ -16,7 +16,7 @@ set done_msg	"### COMMAND EXECUTION COMPLETE ###"
 #puts "DBG: $commands"
 # Call bash script as absolute path, relative to this script (same directory)
 set script_dir	[file normalize [file dirname $argv0]]
-spawn bash $script_dir/ssh-session.sh $user $ip $port "echo '$begin_msg'; $commands; echo '$done_msg'"
+spawn bash $script_dir/ssh-session.sh $user $ip $port "echo '$begin_msg';$commands;echo '$done_msg';"
 expect -nocase "password: "
 # handle ssh-key
 send -h "$password\r"

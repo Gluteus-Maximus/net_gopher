@@ -32,9 +32,9 @@ __all__ = [
 
 
 class Credentials():
-  def __init__(self, ip, port, user, password):
+  def __init__(self, ip, sshPort, user, password):
     self.ip = ip
-    self.port = port
+    self.sshPort = sshPort
     self.user = user
     self.password = password
 
@@ -43,6 +43,7 @@ def main():
   args = get_args()
   print(args)
   #try:
+  print(next(load_csv(args.gateCreds)))
   gateCreds = Credentials(*next(load_csv(args.gateCreds)))
   if args.bashScripts:
     commandStr = ingest_commands(args.bashScripts, args.formatters)
@@ -226,7 +227,6 @@ def ingest_commands(bashScripts, formatters):
       commands.extend(fp.readlines())
   #commands = format_commands(join_commands(commands), formatters)
   commands = join_commands(commands)
-  print("CMDS RAW:\n",commands)  #TODO DBG
   #try:
   if formatters is None:
     return commands
@@ -260,17 +260,18 @@ def join_commands(commandsLst):
   return commands
 
 
-def port_forward(local_port, gate_ip, gate_user, gate_pw,
-        remote_ip, remote_port):
+def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
+        remote_ip, remote_ssh_port):
   retval = sp.run(
-      "expect {} {} {} {} {} {} {}".format(
+      "expect {} {} {} {} {} {} {} {}".format(
         forwarderScriptPath,
         local_port,
         gate_ip,
+        gate_ssh_port,
         gate_user,
         gate_pw,
         remote_ip,
-        remote_port
+        remote_ssh_port
         ),
       shell=True,
       stdout=sp.PIPE,
@@ -292,11 +293,15 @@ def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
     forwardRetval = port_forward(
         localPort,
         gateCreds.ip,
+        gateCreds.sshPort,
         gateCreds.user,
         gateCreds.password,
         remoteIP,
         remotePort
         )
+    print("\nForwarder STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
+        forwardRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
+    print("\nnForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
     sshRetval = ssh_session(
         remoteUser,
         "localhost",
@@ -304,11 +309,10 @@ def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
         remotePassword,
         commandStr
         )
-    print("\nSTDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
+    print("\nSession STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
         sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nSTDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
+    print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
     sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO: better tunnel closer
-    time.sleep(1)
     #TODO: log return data
   pass
 
