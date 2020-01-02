@@ -14,22 +14,27 @@ import copy as _copy
 
 #TODO: capture output from scripts
 
-# Global Script Filepaths
+# Global Filepaths
 fileDir = os.path.dirname(os.path.realpath(__file__))
 scriptsDir = os.path.join(fileDir, "scripts/")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
+#TODO: error log filepath
 
 
 #TODO
 __all__ = [
     ]
 
+#remoteCreds fields ['ip', 'port', 'username', 'password']
+#gateCreds fields ['ip', 'username', 'password'] #TODO: add localport? remote ssh port?
+
 
 class Credentials():
-  def __init__(self, ip, user, password):
+  def __init__(self, ip, port, user, password):
     self.ip = ip
+    self.port = port
     self.user = user
     self.password = password
 
@@ -38,14 +43,14 @@ def main():
   args = get_args()
   print(args)
   #try:
+  gateCreds = Credentials(*next(load_csv(args.gateCreds)))
   if args.bashScripts:
-    commands = list()
-    for filepath in args.bashScripts:
-      with open(filepath) as fp:
-        commands.extend(fp.readlines())
-    commands = format_commands(join_commands(commands), args.formatters)
+    commandStr = ingest_commands(args.bashScripts, args.formatters)
+    remoteCreds = load_csv(args.remoteCreds)
     #print(commands)  #TODO DBG
     # ssh loop
+    tunneled_ssh_loop(args.localport, remoteCreds, gateCreds, commandStr, args.outputDir,
+        os.path.join(args.outputDir, "/error.log"))  #TODO: error log filepath
   if args.scpFiles:
     scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
     # scp loop
@@ -62,6 +67,9 @@ def get_args():
   parser.add_argument('-g', '--gateCreds', action=_readable_file, required=True)
   parser.add_argument('-r', '--remoteCreds', action=_readable_file, required=True)
   parser.add_argument('-o', '--outputDir', action=_readable_dir, required=True)
+  #TODO: check if port in use through _valid_port, or use action _available_port
+  parser.add_argument('-p', '--localport', type=_valid_port, required=False,
+      default=22222)
   #parser.add_argument('-j', '--jsonFile', action=_readable_file, required=True)
   parser.add_argument('-b', '--bashScript', dest='bashScripts', nargs='+',
       action=_readable_file_append, required=False,
@@ -188,6 +196,11 @@ class _update_dict_nargs(ap.Action):
     setattr(namespace, self.dest, my_dict)
 
 
+def _valid_port(port):
+  #TODO: validate
+  return int(port)
+
+
 def load_csv(csvFile):
   #TODO: include expected csv format (incl. header) in docs
   ''' # Doesn't skip comment lines
@@ -206,6 +219,22 @@ def load_csv(csvFile):
   return reader
 
 
+def ingest_commands(bashScripts, formatters):
+  commands = list()
+  for filepath in bashScripts:
+    with open(filepath) as fp:
+      commands.extend(fp.readlines())
+  #commands = format_commands(join_commands(commands), formatters)
+  commands = join_commands(commands)
+  print("CMDS RAW:\n",commands)  #TODO DBG
+  #try:
+  if formatters is None:
+    return commands
+  else:
+    return commands.format(**formatters)
+  #except KeyError as e:
+
+"""
 def format_commands(commandStr, formatters):
   '''
   @params:
@@ -219,14 +248,15 @@ def format_commands(commandStr, formatters):
     return commandStr.format(**formatters)
   except KeyError as e:
     raise e  #TODO: write error mssg
-
+"""
 
 def join_commands(commandsLst):
   # comments must be on their own line or no following commands will be run
+  #TODO: commands have trailing newline
   commands = [cmd for cmd in commandsLst if not cmd.startswith("#")]
   commands = ";".join(commands)
   commands = re.sub("\s*;\s*", ";", commands)  # strip w/s around ';'
-  commands = re.sub(";+", ";", commands).strip(";")  # fix repeated ';'
+  commands = re.sub(";+", ";", commands).strip(";").strip()  # fix repeated ';'
   return commands
 
 
@@ -249,14 +279,14 @@ def port_forward(local_port, gate_ip, gate_user, gate_pw,
   return retval
 
 
-def tunneled_ssh_loop(localPort, credLst, gateCreds, commandStr,
-      outputFilepath, errlogFilepath):  #TODO: add jsonFilepath
+def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
+      outputDir, errlogFilepath):  #TODO: add jsonFilepath
   '''
   @params:
-    credLst: nested list of endpoint creds.
+    remoteCreds: nested list of endpoint creds.
     gateCreds: Credentials object for ssh tunnel gateway.
   '''
-  for remoteIP, remotePort, remoteUser, remotePassword in credLst:
+  for remoteIP, remotePort, remoteUser, remotePassword in remoteCreds:
     #TODO: store/delete forwarder socket
     #TODO: check if localport in use, kill process/block until open
     forwardRetval = port_forward(
@@ -274,8 +304,11 @@ def tunneled_ssh_loop(localPort, credLst, gateCreds, commandStr,
         remotePassword,
         commandStr
         )
-    print(sshRetval.stdout.decode('utf-8'))  #TODO DBG
+    print("\nSTDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
+        sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
+    print("\nSTDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
     sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO: better tunnel closer
+    time.sleep(1)
     #TODO: log return data
   pass
 
