@@ -9,4 +9,4 @@ remote_ip=$4
 remote_port=$5
 
 #ssh -f -N -S port-forward-socket -L localhost:$local_port:$remote_ip:$remote_port $gate_user@$gate_ip
-ssh -q -o StrictHostKeyChecking=no -f -N -L localhost:$local_port:$remote_ip:$remote_port $gate_user@$gate_ip
+ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -f -N -L localhost:$local_port:$remote_ip:$remote_port $gate_user@$gate_ip
