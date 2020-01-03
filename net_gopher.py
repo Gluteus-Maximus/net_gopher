@@ -17,7 +17,7 @@ import copy as _copy
 # Global Filepaths
 fileDir = os.path.dirname(os.path.realpath(__file__))
 scriptsDir = os.path.join(fileDir, "expect/")
-sshMasterScriptPath = os.path.join(scriptsDir, "ssh-open-master-socket.exp")
+sshMasterScriptPath = os.path.join(scriptsDir, "ssh-socket-open-master.exp")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
@@ -49,19 +49,33 @@ def main():
   #TODO: store json
   #TODO: mkdir for each ip (if scpFiles??)
   #TODO: store errors
-  gateCreds = Credentials(*next(load_csv(args.gateCreds)))
-  if args.bashScripts:
-    commandStr = ingest_commands(args.bashScripts, args.formatters)
-    remoteCreds = load_csv(args.remoteCreds)
-    #print(commands)  #TODO DBG
-    # ssh loop
-    tunneled_ssh_loop(args.localport, remoteCreds, gateCreds, commandStr, args.outputDir,
-        os.path.join(args.outputDir, "/error.log"))  #TODO: error log filepath
-  if args.scpFiles:
-    scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
-    # scp loop
-  #except Exception as e:
-  #  print("ERROR: {}".format(e), file=sys.stderr)  #TODO DBG
+  #gateCreds = Credentials(*next(load_csv(args.gateCreds)))
+  # unpack gateCreds, remove Credentials()
+  gateIP, gatePort, gateUser, gatePW = next(load_csv(args.gateCreds))
+  socketPath = "ssh_socket"
+
+  try:
+    # open master
+    retval = ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW)
+    print("\nSession STDOUT:\n",
+        retval.stdout.decode('utf-8'), sep="")  #TODO DBG
+    print("\nSession STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+    # loop scripts
+    if args.bashScripts:
+      commandStr = ingest_commands(args.bashScripts, args.formatters)
+      remoteCreds = load_csv(args.remoteCreds)
+      tunneled_ssh_loop("ssh_socket", args.localport, remoteCreds, commandStr,
+          args.outputDir, os.path.join(args.outputDir, "/error.log"))  #TODO: error log filepath
+    # loop scp
+    if args.scpFiles:
+      scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
+  except Exception as e:  #TODO: specify
+    raise e
+    pass  #TODO: react
+  finally:
+    # close master
+    retval = ssh_socket_close_master(socketPath)
+
 
 def get_args():
   #TODO: how to allow multiple of a flag?
@@ -267,6 +281,7 @@ def join_commands(commandsLst):
 
 def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
         remote_ip, remote_ssh_port):
+  #TODO: deprecated
   retval = sp.run(
       "expect {} {} {} {} {} {} {} {}".format(
         forwarderScriptPath,
@@ -285,10 +300,24 @@ def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
   return retval
 
 
-def ssh_socket_open_master(socketPath, gateIP, gateSshPort, gateUser, gatePW):
+def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
+  #print( "expect {} {} {} {} {} {}".format(sshMasterScriptPath, gateIP, gatePort, gateUser, gatePW, socketPath))
+  retval = sp.run(
+      # parameter after 'exit' is irrelevant, but something must be put in this slot
+      "expect {} {} {} {} {} {}".format(
+        sshMasterScriptPath,
+        gateIP,
+        gatePort,
+        gateUser,
+        gatePW,
+        socketPath
+        ),
+      shell=True,
+      stdout=sp.PIPE,
+      stderr=sp.PIPE
+      )
   #TODO: prevent "ControlSocket ssh_socket already exists, disabling multiplexing" from creating session
-  retval = 0
-  return retval.returncode
+  return retval
 
 
 def ssh_socket_close_master(socketPath):
@@ -299,7 +328,7 @@ def ssh_socket_close_master(socketPath):
       stdout=sp.PIPE,
       stderr=sp.PIPE
       )
-  return retval.returncode
+  return retval
 
 
 _sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -323,7 +352,7 @@ def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
       stdout=sp.PIPE,
       stderr=sp.PIPE
       )
-  return retval.returncode
+  return retval
 
 
 def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir, errlogPath):
@@ -334,6 +363,7 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
     #while c <= 2:
     try:
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
+      print("\nnForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
       #TODO: check return, retry
       #else:
       #  raise Exception("DBG something DBG")
