@@ -286,19 +286,44 @@ def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
 
 
 def ssh_socket_open_master(socketPath, gateIP, gateSshPort, gateUser, gatePW):
-  pass
+  #TODO: prevent "ControlSocket ssh_socket already exists, disabling multiplexing" from creating session
+  retval = 0
+  return retval.returncode
 
 
 def ssh_socket_close_master(socketPath):
-  pass
+  retval = sp.run(
+      # parameter after 'exit' is irrelevant, but something must be put in this slot
+      "ssh -S {} -O exit towel@42".format(socketPath),
+      shell=True,
+      stdout=sp.PIPE,
+      stderr=sp.PIPE
+      )
+  return retval.returncode
 
 
-def ssh_socket_open_forward(socketPath, localPort, remoteIP, remotePort):
-  pass
+_sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+# parameter after forwarder settings is irrelevant, but something must be put in this slot
+_sshSocketForwardFormatStr = "ssh -S {} -O {} {} -L localhost:{}:{}:{} towel@42 -fN"
 
 
-def ssh_socket_close_forward(socketPath, localPort, remoteIP, remotePort):
-  pass
+def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
+  assert action in ["forward", "cancel"], \
+      "ERROR: ssh_socket_forward: action parameter must be in [\"forward\", \"cancel\"]"
+  retval = sp.run(
+      _sshSocketForwardFormatStr.format(
+        socketPath,
+        action,
+        _sshOptions,
+        localPort,
+        remoteIP,
+        remotePort
+        ),
+      shell=True,
+      stdout=sp.PIPE,
+      stderr=sp.PIPE
+      )
+  return retval.returncode
 
 
 def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir, errlogPath):
@@ -308,7 +333,7 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
     #c = 0
     #while c <= 2:
     try:
-      retval = ssh_socket_open_forward(socketPath, localPort, remoteIP, remotePort)
+      retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
       #TODO: check return, retry
       #else:
       #  raise Exception("DBG something DBG")
@@ -320,7 +345,7 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
     except Exception as e:  #TODO: specify & define response
       pass
     finally:
-      retval = ssh_socket_close_forward(socketPath, localPort, remoteIP, remotePort)
+      retval = ssh_socket_forward("cancel", socketPath, localPort, remoteIP, remotePort)
     #TODO: check return, retry
 
 
