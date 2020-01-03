@@ -27,8 +27,7 @@ scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
 __all__ = [
     ]
 
-#remoteCreds fields ['ip', 'port', 'username', 'password']
-#gateCreds fields ['ip', 'username', 'password'] #TODO: add localport? remote ssh port?
+#remoteCreds/gateCreds fields ['ip', 'ssh_port', 'username', 'password']
 
 
 class Credentials():
@@ -305,7 +304,8 @@ def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
         remotePort
         )
     #print("\nForwarder STDOUT:\n", forwardRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    #print("\nnForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
+    print("\nnForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
+    #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
     sshRetval = ssh_session(
         remoteUser,
         "localhost",
@@ -317,6 +317,7 @@ def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
         sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
     print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
     sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO: better tunnel closer
+    #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
     #TODO: log return data
   pass
 
