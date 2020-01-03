@@ -301,7 +301,30 @@ def ssh_socket_close_forward(socketPath, localPort, remoteIP, remotePort):
   pass
 
 
-def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
+def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir, errlogPath):
+  #TODO: add jsonPath
+  for remoteIP, remotePort, remoteUser, remotePW in remoteCreds:
+    #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
+    #c = 0
+    #while c <= 2:
+    try:
+      retval = ssh_socket_open_forward(socketPath, localPort, remoteIP, remotePort)
+      #TODO: check return, retry
+      #else:
+      #  raise Exception("DBG something DBG")
+      sshRetval = ssh_session(remoteUser, "localhost", localPort, remotePW, commandStr)
+      #TODO: log data & errors
+      print("\nSession STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
+          sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
+      print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
+    except Exception as e:  #TODO: specify & define response
+      pass
+    finally:
+      retval = ssh_socket_close_forward(socketPath, localPort, remoteIP, remotePort)
+    #TODO: check return, retry
+
+
+def X_tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
       outputDir, errlogFilepath):  #TODO: add jsonFilepath
   '''
   @params:
