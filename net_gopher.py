@@ -17,6 +17,7 @@ import copy as _copy
 # Global Filepaths
 fileDir = os.path.dirname(os.path.realpath(__file__))
 scriptsDir = os.path.join(fileDir, "expect/")
+sshMasterScriptPath = os.path.join(scriptsDir, "ssh-open-master-socket.exp")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
@@ -282,6 +283,22 @@ def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
       stderr=sp.PIPE)
   #TODO: check retval.returncode, log failure
   return retval
+
+
+def ssh_socket_open_master(socketPath, gateIP, gateSshPort, gateUser, gatePW):
+  pass
+
+
+def ssh_socket_close_master(socketPath):
+  pass
+
+
+def ssh_socket_open_forward(socketPath, localPort, remoteIP, remotePort):
+  pass
+
+
+def ssh_socket_close_forward(socketPath, localPort, remoteIP, remotePort):
+  pass
 
 
 def tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
