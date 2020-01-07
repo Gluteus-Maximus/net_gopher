@@ -52,14 +52,14 @@ def main():
   #gateCreds = Credentials(*next(load_csv(args.gateCreds)))
   # unpack gateCreds, remove Credentials()
   gateIP, gatePort, gateUser, gatePW = next(load_csv(args.gateCreds))
-  socketPath = "ssh_socket"
+  socketPath = os.path.join(fileDir, "gopher_socket") #_{}".format(time.strftime("%Y%m%d%H%M%S")))
 
   try:
     # open master
     retval = ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW)
-    print("\nSession STDOUT:\n",
+    print("\nSocket STDOUT:\n",
         retval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nSession STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
     # loop scripts
     if args.bashScripts:
       commandStr = ingest_commands(args.bashScripts, args.formatters)
@@ -74,7 +74,11 @@ def main():
     pass  #TODO: react
   finally:
     # close master
+    #TODO: try/exc warn socket (name) not closed, give cli command to close, log
     retval = ssh_socket_close_master(socketPath)
+    print("\nSocket STDOUT:\n",
+        retval.stdout.decode('utf-8'), sep="")  #TODO DBG
+    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
 
 
 def get_args():
@@ -302,6 +306,7 @@ def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
 
 def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
   #print( "expect {} {} {} {} {} {}".format(sshMasterScriptPath, gateIP, gatePort, gateUser, gatePW, socketPath))
+  #TODO: check retval, raise exc
   retval = sp.run(
       # parameter after 'exit' is irrelevant, but something must be put in this slot
       "expect {} {} {} {} {} {}".format(
@@ -321,6 +326,7 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
 
 
 def ssh_socket_close_master(socketPath):
+  #TODO: check retval, raise exc
   retval = sp.run(
       # parameter after 'exit' is irrelevant, but something must be put in this slot
       "ssh -S {} -O exit towel@42".format(socketPath),
@@ -363,7 +369,7 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
     #while c <= 2:
     try:
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
-      print("\nnForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+      print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
       #TODO: check return, retry
       #else:
       #  raise Exception("DBG something DBG")
@@ -399,7 +405,7 @@ def X_tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
         remotePort
         )
     #print("\nForwarder STDOUT:\n", forwardRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nnForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
+    print("\nForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
     #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
     sshRetval = ssh_session(
         remoteUser,
