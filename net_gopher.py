@@ -13,6 +13,9 @@ import subprocess as sp
 import copy as _copy
 
 #TODO: capture output from scripts
+#TODO: initialize template files (creds)
+
+__DBG = True  #TODO DBG
 
 # Global Filepaths
 fileDir = os.path.dirname(os.path.realpath(__file__))
@@ -31,36 +34,25 @@ __all__ = [
 #remoteCreds/gateCreds fields ['ip', 'ssh_port', 'username', 'password']
 
 
-class Credentials():
-  def __init__(self, ip, sshPort, user, password):
-    self.ip = ip
-    self.sshPort = sshPort
-    self.user = user
-    self.password = password
-
-
 def main():
   args = get_args()
-  #print(args) #TODO DBG
-  #try:
-  #print(next(load_csv(args.gateCreds)))  #TODO DBG
+  if __DBG: print(args) #TODO DBG
   #TODO: mkdir from dtg
   #TODO: store raw log
   #TODO: store json
   #TODO: mkdir for each ip (if scpFiles??)
   #TODO: store errors
-  #gateCreds = Credentials(*next(load_csv(args.gateCreds)))
-  # unpack gateCreds, remove Credentials()
+  # unpack gateCreds from file
   gateIP, gatePort, gateUser, gatePW = next(load_csv(args.gateCreds))
-  socketPath = os.path.join(fileDir, "gopher_socket_{}".format(time.strftime("%Y%m%d%H%M%S")))
+  socketPath = os.path.join(fileDir, ".gopher_socket_{}".format(time.strftime("%Y%m%d%H%M%S")))
 
   try:
     # open master
     retval = ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW)
-    print("\nSocket STDOUT:\n",
-        retval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
-    #time.sleep(2)  #TODO DBG
+    if __DBG:  #TODO DBG
+      print("\nSocket STDOUT:\n",
+          retval.stdout.decode('utf-8'), sep="")  #TODO DBG
+      print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
     # loop scripts
     if args.bashScripts:
       commandStr = ingest_commands(args.bashScripts, args.formatters)
@@ -76,11 +68,11 @@ def main():
   finally:
     # close master
     #TODO: try/exc warn socket (name) not closed, give cli command to close, log
-    #time.sleep(30)  #TODO DBG
     retval = ssh_socket_close_master(socketPath)
-    print("\nSocket STDOUT:\n",
-        retval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+    if __DBG:  #TODO DBG
+      print("\nSocket STDOUT:\n",
+          retval.stdout.decode('utf-8'), sep="")  #TODO DBG
+      print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
 
 
 def get_args():
@@ -269,21 +261,6 @@ def ingest_commands(bashScripts, formatters):
     return commands.format(**formatters)
   #except KeyError as e:
 
-"""
-def format_commands(commandStr, formatters):
-  '''
-  @params:
-    commandsLst: command string to be formatted.
-    formatters: dictionary of formatters to apply to commands string.
-      * Keys must match between commandStr and formatters
-  '''
-  if formatters is None:
-    return commandStr
-  try:
-    return commandStr.format(**formatters)
-  except KeyError as e:
-    raise e  #TODO: write error mssg
-"""
 
 def join_commands(commandsLst):
   # comments must be on their own line or no following commands will be run
@@ -295,30 +272,10 @@ def join_commands(commandsLst):
   return commands
 
 
-def port_forward(local_port, gate_ip, gate_ssh_port, gate_user, gate_pw,
-        remote_ip, remote_ssh_port):
-  #TODO: deprecated
-  retval = sp.run(
-      "expect {} {} {} {} {} {} {} {}".format(
-        forwarderScriptPath,
-        local_port,
-        gate_ip,
-        gate_ssh_port,
-        gate_user,
-        gate_pw,
-        remote_ip,
-        remote_ssh_port
-        ),
-      shell=True,
-      stdout=sp.PIPE,
-      stderr=sp.PIPE)
-  #TODO: check retval.returncode, log failure
-  return retval
-
-
 def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
   #print( "expect {} {} {} {} {} {}".format(sshMasterScriptPath, gateIP, gatePort, gateUser, gatePW, socketPath))
   #TODO: check retval, raise exc
+  #TODO: while counter && not file.exists
   retval = sp.run(
       # parameter after 'exit' is irrelevant, but something must be put in this slot
       "expect {} {} {} {} {} {}".format(
@@ -334,6 +291,8 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
       stderr=sp.PIPE
       )
   #TODO: prevent "ControlSocket ssh_socket already exists, disabling multiplexing" from creating session
+  time.sleep(1)
+  #TODO: raise exc if socketPath fails to create (attempt N times?)
   return retval
 
 
@@ -350,7 +309,7 @@ def ssh_socket_close_master(socketPath):
 
 
 _sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-# parameter after forwarder settings is irrelevant, but something must be put in this slot
+# parameter after forwarder settings is irrelevant, but something must be put in this spot
 _sshSocketForwardFormatStr = "ssh -S {} -O {} {} -L localhost:{}:{}:{} towel@42 -fN"
 
 
@@ -381,12 +340,14 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
     #while c <= 2:
     try:
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
-      print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+      if __DBG:  #TODO DBG
+        print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
       #TODO: check return, retry
       #else:
       #  raise Exception("DBG something DBG")
+      #TODO: cut out extra params
       sshRetval = ssh_session(remoteUser, "localhost", localPort, remotePW, commandStr)
-      #TODO: log data & errors
+      #TODO: log data & errors (join ip, user, date, data)
       print("\nSession STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
           sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
       print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
@@ -397,46 +358,9 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
     #TODO: check return, retry
 
 
-def X_tunneled_ssh_loop(localPort, remoteCreds, gateCreds, commandStr,
-      outputDir, errlogFilepath):  #TODO: add jsonFilepath
-  '''
-  @params:
-    remoteCreds: nested list of endpoint creds.
-    gateCreds: Credentials object for ssh tunnel gateway.
-  '''
-  for remoteIP, remotePort, remoteUser, remotePassword in remoteCreds:
-    #TODO: store/delete forwarder socket
-    #TODO: check if localport in use, kill process/block until open
-    forwardRetval = port_forward(
-        localPort,
-        gateCreds.ip,
-        gateCreds.sshPort,
-        gateCreds.user,
-        gateCreds.password,
-        remoteIP,
-        remotePort
-        )
-    #print("\nForwarder STDOUT:\n", forwardRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nForwarder STDERR:\n", forwardRetval.stderr.decode('utf-8'))  #TODO DBG
-    #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
-    sshRetval = ssh_session(
-        remoteUser,
-        "localhost",
-        localPort,
-        remotePassword,
-        commandStr
-        )
-    print("\nSession STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
-        sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-    print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
-    sp.run("pkill ssh", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)  #TODO: better tunnel closer
-    #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
-    #TODO: log return data
-  pass
-
-
 def ssh_session(user, ip, port, password, commandStr):
   #print("DBG: {}".format(commands))
+  #TODO: cut out extra params
   retval = sp.run(
       "expect {} {} {} {} {} {}".format(
         sshScriptPath,
@@ -454,6 +378,9 @@ def ssh_session(user, ip, port, password, commandStr):
 
 
 def tunneled_scp_loop():
+  #TODO: log errors
+  #files = list(csv_load)  # will be list of lists
+  # for stuff in remoteCreds: forward, scp files, cancel
   pass
 
 

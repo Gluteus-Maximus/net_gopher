@@ -7,4 +7,4 @@ ip=$2
 port=$3
 cmd=$4
 
-ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$ip -p $port "$4"
+ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$ip -p $port "$cmd"
