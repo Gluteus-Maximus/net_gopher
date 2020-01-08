@@ -52,7 +52,7 @@ def main():
   #gateCreds = Credentials(*next(load_csv(args.gateCreds)))
   # unpack gateCreds, remove Credentials()
   gateIP, gatePort, gateUser, gatePW = next(load_csv(args.gateCreds))
-  socketPath = os.path.join(fileDir, "gopher_socket") #_{}".format(time.strftime("%Y%m%d%H%M%S")))
+  socketPath = os.path.join(fileDir, "gopher_socket_{}".format(time.strftime("%Y%m%d%H%M%S")))
 
   try:
     # open master
@@ -60,21 +60,23 @@ def main():
     print("\nSocket STDOUT:\n",
         retval.stdout.decode('utf-8'), sep="")  #TODO DBG
     print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+    #time.sleep(2)  #TODO DBG
     # loop scripts
     if args.bashScripts:
       commandStr = ingest_commands(args.bashScripts, args.formatters)
       remoteCreds = load_csv(args.remoteCreds)
-      tunneled_ssh_loop("ssh_socket", args.localport, remoteCreds, commandStr,
+      tunneled_ssh_loop(socketPath, args.localport, remoteCreds, commandStr,
           args.outputDir, os.path.join(args.outputDir, "/error.log"))  #TODO: error log filepath
     # loop scp
     if args.scpFiles:
       scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
   except Exception as e:  #TODO: specify
-    raise e
+    raise e #TODO DBG
     pass  #TODO: react
   finally:
     # close master
     #TODO: try/exc warn socket (name) not closed, give cli command to close, log
+    #time.sleep(30)  #TODO DBG
     retval = ssh_socket_close_master(socketPath)
     print("\nSocket STDOUT:\n",
         retval.stdout.decode('utf-8'), sep="")  #TODO DBG
@@ -132,6 +134,16 @@ class _readable_file(ap.Action):
       setattr(namespace,self.dest,values)
     else:
       raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
+
+
+def _DBG_readable_file(filepath):  #TODO DBG - remove
+  if not os.path.isfile(filepath):
+    print("DBG Readable File: '{}': file is invalid".format(filepath))
+  if os.access(filepath, os.R_OK):
+    print("DBG Readable File: '{}': file is valid".format(filepath))
+  else:
+    print("DBG Readable File: '{}': file isn't readable".format(filepath))
+
 
 class _readable_file_append(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
@@ -198,7 +210,7 @@ def _key_val_pair(keyValPair):
 
 
 def _date_formatter(dateStr):
-  #call _key_val_pair
+  #TODO: call _key_val_pair with keys and modified values. DON'T overwrite existing values.
   pass
 
 
@@ -221,13 +233,13 @@ class _update_dict_nargs(ap.Action):
 
 
 def _valid_port(port):
-  #TODO: validate
+  #TODO: validate in range
   return int(port)
 
 
 def load_csv(csvFile):
   #TODO: include expected csv format (incl. header) in docs
-  ''' # Doesn't skip comment lines
+  ''' # Doesn't skip comment lines (subclass reader?)
   with open(csvFile) as fp:
     reader = csv.reader(fp)
     next(reader)  # skip header
