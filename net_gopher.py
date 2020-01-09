@@ -18,14 +18,14 @@ import copy as _copy
 __DBG = True  #TODO DBG
 
 # Global Filepaths
-fileDir = os.path.dirname(os.path.realpath(__file__))
-scriptsDir = os.path.join(fileDir, "expect/")
+fileDir =             os.path.dirname(os.path.realpath(__file__))
+defaultOutputDir =    os.path.join(fileDir, "output/")
+errorLogDir =         os.path.join(fileDir, "log/")
+scriptsDir =          os.path.join(fileDir, "expect/")
 sshMasterScriptPath = os.path.join(scriptsDir, "ssh-socket-open-master.exp")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
-sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
-scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
-#TODO: default outputDir - relative to __file__ parentDir
-#TODO: error log filepath
+sshScriptPath =       os.path.join(scriptsDir, "ssh-session.exp")
+scpScriptPath =       os.path.join(scriptsDir, "scp-session.exp")
 
 
 #TODO
@@ -55,13 +55,13 @@ def main():
       commandStr = ingest_commands(args.bashScripts, args.formatters)
       remoteCreds = load_csv(args.remoteCreds)
       tunneled_ssh_loop(socketPath, args.localport, remoteCreds, commandStr,
-          args.outputDir, os.path.join(args.outputDir, "/error.log"))  #TODO: error log filepath
+          args.outputDir, os.path.join(args.outputDir, errorLogDir))  #TODO: error log filepath
     # call file scp loop
     if args.scpFiles:
       scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
   except Exception as e:  #TODO: specify
-    raise e #TODO DBG
     print(e, file=sys.stderr)
+    raise e #TODO DBG
   finally:
     # close master ssh socket
     try:
@@ -161,8 +161,8 @@ def _store_key_pairs_factory(separator):
   class _store_key_pairs(ap.Action):
     '''
     @func: Takes key value pairs (separated by 'separator') and updates dict 'dest'
+           note: If dest isn't a dictionary, its value will be replaced by a new dict
     '''
-    #TODO: raise ArgumentError if dest is not dict
     def __init__(self, option_strings, dest, nargs=None, **kwargs):
       self._nargs = nargs
       super(_store_key_pairs, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
@@ -197,13 +197,18 @@ def _key_val_pair(keyValPair):
   return dict([(key, value)])
 
 
+#TODO: include formatter instructions in docs
+
 def _date_formatter(dateStr):
   #TODO: call _key_val_pair with keys and modified values. DON'T overwrite existing values.
   pass
 
 
 class _update_dict_nargs(ap.Action):
-  #TODO: raise ArgumentError if dest or value are not dict
+  '''
+  @func:
+         note: If dest isn't a dictionary, its value will be replaced by a new dict
+  '''
   def __init__(self, option_strings, dest, nargs=None, **kwargs):
     self._nargs = nargs
     super(_update_dict_nargs, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
@@ -248,7 +253,6 @@ def ingest_commands(bashScripts, formatters):
   for filepath in bashScripts:
     with open(filepath) as fp:
       commands.extend(fp.readlines())
-  #commands = format_commands(join_commands(commands), formatters)
   commands = join_commands(commands)
   #try:
   if formatters is None:
@@ -259,21 +263,19 @@ def ingest_commands(bashScripts, formatters):
 
 
 def join_commands(commandsLst):
-  # comments must be on their own line or no following commands will be run
-  #TODO: commands have trailing newline
+  # comments must be on their own line or no subsequent commands will be run
+  # skip commented (#) lines
   commands = [cmd for cmd in commandsLst if not cmd.startswith("#")]
   commands = ";".join(commands)
-  commands = re.sub("\s*;\s*", ";", commands)  # strip w/s around ';'
-  commands = re.sub(";+", ";", commands).strip(";").strip()  # fix repeated ';'
+  # strip w/s around ';'
+  commands = re.sub("\s*;\s*", ";", commands)
+  # fix repeated ';' and trailing newline
+  commands = re.sub(";+", ";", commands).strip(";").strip()
   return commands
 
 
 def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
-  #print( "expect {} {} {} {} {} {}".format(sshMasterScriptPath, gateIP, gatePort, gateUser, gatePW, socketPath))
-  #TODO: check retval, raise exc
-  #TODO: while counter && not file.exists
-  retval = ""
-  attempts = 3
+  attempts = 5
   while attempts > 0 and not ssh_socket_check_master(socketPath):
     if __DBG:  #TODO DBG
       print("DBG open socket: remaining attempts: {}".format(attempts), file=sys.stderr)
@@ -309,7 +311,8 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
 
 def ssh_socket_check_master(socketPath):
   '''
-  @return: 0 if socket open, else non-zero
+  @func: determines if a socket at the given path is active
+  @return: True if socket open, else False
   '''
   retval = sp.run(
       "ssh -S {} -O check towel@42".format(socketPath),
@@ -321,8 +324,7 @@ def ssh_socket_check_master(socketPath):
 
 
 def ssh_socket_close_master(socketPath):
-  #TODO: check retval, raise exc
-  attempts = 3
+  attempts = 5
   while attempts > 0 and ssh_socket_check_master(socketPath):
     if __DBG:  #TODO DBG
       print("DBG close socket: remaining attempts: {}".format(attempts), file=sys.stderr)
@@ -347,8 +349,9 @@ def ssh_socket_close_master(socketPath):
   return retval
 
 
+# ssh command strings
 _sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-# parameter after forwarder settings is irrelevant, but something must be put in this spot
+# parameter after forwarder settings is irrelevant, but something must be put in this slot
 _sshSocketForwardFormatStr = "ssh -S {} -O {} {} -L localhost:{}:{}:{} towel@42 -fN"
 
 
@@ -371,7 +374,7 @@ def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
   return retval
 
 
-def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir, errlogPath):
+def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir, errorLogDir):
   #TODO: add jsonPath
   for remoteIP, remotePort, remoteUser, remotePW in remoteCreds:
     #TODO: check stderr for spawn id * not open, attempt again, log (keep counter, quit after X)
@@ -398,8 +401,6 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
 
 
 def ssh_session(user, ip, port, password, commandStr):
-  #print("DBG: {}".format(commands))
-  #TODO: cut out extra params
   retval = sp.run(
       "expect {} {} {} {} {} {}".format(
         sshScriptPath,
@@ -412,11 +413,10 @@ def ssh_session(user, ip, port, password, commandStr):
       shell=True,
       stdout=sp.PIPE,
       stderr=sp.PIPE)
-  #TODO: check retval.returncode, log failure
   return retval
 
 
-def tunneled_scp_loop():
+def tunneled_scp_loop(socketPath, localPort, remoteCreds, fileLst, outputDir, errorLogDir):
   #TODO: log errors
   #files = list(csv_load)  # will be list of lists
   # for stuff in remoteCreds: forward, scp files, cancel
