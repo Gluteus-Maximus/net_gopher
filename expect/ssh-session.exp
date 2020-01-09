@@ -13,9 +13,7 @@ set begin_msg	"### COMMAND EXECUTION BEGIN ###"
 set done_msg	"### COMMAND EXECUTION COMPLETE ###"
 
 log_user 0
-# Call bash script as absolute path, relative to this script (same directory)
-set script_dir	[file normalize [file dirname $argv0]]
-spawn bash $script_dir/ssh-session.sh $user $ip $port "echo '$begin_msg';$commands;echo '$done_msg';"
+spawn ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$ip -p $port "$commands"
 expect -nocase "password: "
 # handle ssh-key
 send -h "$password\r"
