@@ -1,4 +1,5 @@
 *.sw*
-/test/
+/.test/
+/user/creds/test/
 test-*
 __pycache__/

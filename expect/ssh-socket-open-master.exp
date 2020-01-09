@@ -1,0 +1,22 @@
+#!/usr/bin/expect -f
+# Defines how slowly 'send -h' will type
+set send_human {.01 .1 10 .05 1}
+set timeout 30
+
+# Parameters
+set ip          [lindex $argv 0]
+set ssh_port    [lindex $argv 1]
+set user        [lindex $argv 2]
+set password    [lindex $argv 3]
+set ssh_socket  [lindex $argv 4]
+
+log_user 0
+spawn -ignore HUP ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -M -S $ssh_socket $user@$ip -p $ssh_port -fN
+# Call bash script as absolute path, relative to this script (same directory)
+#set script_dir	[file normalize [file dirname $argv0]]
+#spawn bash $script_dir/ssh-socket-open-master.sh $ip $ssh_port $user $ssh_socket
+expect -nocase "password: "
+sleep 1
+# handle ssh-key
+send -h "$password\r"
+log_user 1
