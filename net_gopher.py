@@ -24,6 +24,7 @@ sshMasterScriptPath = os.path.join(scriptsDir, "ssh-socket-open-master.exp")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath = os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath = os.path.join(scriptsDir, "scp-session.exp")
+#TODO: default outputDir - relative to __file__ parentDir
 #TODO: error log filepath
 
 
@@ -47,32 +48,26 @@ def main():
   socketPath = os.path.join(fileDir, ".gopher_socket_{}".format(time.strftime("%Y%m%d%H%M%S")))
 
   try:
-    # open master
+    # open master ssh socket
     retval = ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW)
-    if __DBG:  #TODO DBG
-      print("\nSocket STDOUT:\n",
-          retval.stdout.decode('utf-8'), sep="")  #TODO DBG
-      print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
-    # loop scripts
+    # call script loop
     if args.bashScripts:
       commandStr = ingest_commands(args.bashScripts, args.formatters)
       remoteCreds = load_csv(args.remoteCreds)
       tunneled_ssh_loop(socketPath, args.localport, remoteCreds, commandStr,
           args.outputDir, os.path.join(args.outputDir, "/error.log"))  #TODO: error log filepath
-    # loop scp
+    # call file scp loop
     if args.scpFiles:
       scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
   except Exception as e:  #TODO: specify
     raise e #TODO DBG
-    pass  #TODO: react
+    print(e, file=sys.stderr)
   finally:
-    # close master
-    #TODO: try/exc warn socket (name) not closed, give cli command to close, log
-    retval = ssh_socket_close_master(socketPath)
-    if __DBG:  #TODO DBG
-      print("\nSocket STDOUT:\n",
-          retval.stdout.decode('utf-8'), sep="")  #TODO DBG
-      print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+    # close master ssh socket
+    try:
+      retval = ssh_socket_close_master(socketPath)
+    except Exception as e:
+      print(e, file=sys.stderr)
 
 
 def get_args():
@@ -84,6 +79,7 @@ def get_args():
   parser = ap.ArgumentParser()  #TODO: add desc
   parser.add_argument('-g', '--gateCreds', action=_readable_file, required=True)
   parser.add_argument('-r', '--remoteCreds', action=_readable_file, required=True)
+  #TODO: required=False, default=defaultOutputDir
   parser.add_argument('-o', '--outputDir', action=_readable_dir, required=True)
   #TODO: check if port in use through _valid_port, or use action _available_port
   parser.add_argument('-p', '--localport', type=_valid_port, required=False,
@@ -276,35 +272,78 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
   #print( "expect {} {} {} {} {} {}".format(sshMasterScriptPath, gateIP, gatePort, gateUser, gatePW, socketPath))
   #TODO: check retval, raise exc
   #TODO: while counter && not file.exists
+  retval = ""
+  attempts = 3
+  while attempts > 0 and not ssh_socket_check_master(socketPath):
+    if __DBG:  #TODO DBG
+      print("DBG open socket: remaining attempts: {}".format(attempts), file=sys.stderr)
+    retval = sp.run(
+        # parameter after 'exit' is irrelevant, but something must be put in this slot
+        "expect {} {} {} {} {} {}".format(
+          sshMasterScriptPath,
+          gateIP,
+          gatePort,
+          gateUser,
+          gatePW,
+          socketPath
+          ),
+        shell=True,
+        stdout=sp.PIPE,
+        stderr=sp.PIPE
+        )
+    #TODO: prevent "ControlSocket ssh_socket already exists, disabling multiplexing" from creating session
+    time.sleep(1)
+    attempts -= 1
+
+  # raise exception if fails to create socket
+  if not ssh_socket_check_master(socketPath):
+    #TODO: log error
+    raise Exception("ERROR: Failed to create multiplex socket. Check ssh settings and try again.")
+    #TODO: specify exc?
+
+  if __DBG:  #TODO DBG
+    print("\nSocket STDOUT:\n", retval.stdout.decode('utf-8'), sep="", file=sys.stderr)
+    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), file=sys.stderr)
+  return retval
+
+
+def ssh_socket_check_master(socketPath):
+  '''
+  @return: 0 if socket open, else non-zero
+  '''
   retval = sp.run(
-      # parameter after 'exit' is irrelevant, but something must be put in this slot
-      "expect {} {} {} {} {} {}".format(
-        sshMasterScriptPath,
-        gateIP,
-        gatePort,
-        gateUser,
-        gatePW,
-        socketPath
-        ),
+      "ssh -S {} -O check towel@42".format(socketPath),
       shell=True,
       stdout=sp.PIPE,
       stderr=sp.PIPE
       )
-  #TODO: prevent "ControlSocket ssh_socket already exists, disabling multiplexing" from creating session
-  time.sleep(1)
-  #TODO: raise exc if socketPath fails to create (attempt N times?)
-  return retval
+  return True if retval.returncode == 0 else False
 
 
 def ssh_socket_close_master(socketPath):
   #TODO: check retval, raise exc
-  retval = sp.run(
-      # parameter after 'exit' is irrelevant, but something must be put in this slot
-      "ssh -S {} -O exit towel@42".format(socketPath),
-      shell=True,
-      stdout=sp.PIPE,
-      stderr=sp.PIPE
-      )
+  attempts = 3
+  while attempts > 0 and ssh_socket_check_master(socketPath):
+    if __DBG:  #TODO DBG
+      print("DBG close socket: remaining attempts: {}".format(attempts), file=sys.stderr)
+    retval = sp.run(
+        # parameter after 'exit' is irrelevant, but something must be put in this slot
+        "ssh -S {} -O exit towel@42".format(socketPath),
+        shell=True,
+        stdout=sp.PIPE,
+        stderr=sp.PIPE
+        )
+    attempts -= 1
+
+  # raise exception if fails to close socket
+  if ssh_socket_check_master(socketPath):
+    #TODO: log error
+    raise Exception("ERROR: Failed to close multiplex ssh socket '{}'".format(socketPath))
+    #TODO: specify exc?
+
+  if __DBG:  #TODO DBG
+    print("\nSocket STDOUT:\n", retval.stdout.decode('utf-8'), sep="", file=sys.stderr)
+    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), file=sys.stderr)
   return retval
 
 
