@@ -43,10 +43,11 @@ __all__ = [
 def main():
   args = get_args()
   try:
+    # validate/create necessary file structure
     args = setup_outputDir(args)
     global _DBG
     _DBG = args.DEBUG  #TODO: temp - pass args to functions, check DEBUG from there? pass DEBUG?
-    if _DBG: print(args, file=sys.stderr) #TODO DBG
+    if _DBG: print("\n", args, "\n", sep="", file=sys.stderr) #TODO DBG
     #TODO: mkdir from dtg
     #TODO: store raw log
     #TODO: store json
@@ -64,7 +65,7 @@ def main():
       commandStr = ingest_commands(args.bashScripts, args.formatters)
       remoteCreds = load_csv(args.remoteCreds)
       tunneled_ssh_loop(socketPath, args.localport, remoteCreds, commandStr,
-          args.outputDir, args.errorLog)  #TODO: error log filepath
+          args.outputLog, args.errorLog)  #TODO: error log filepath
     # call file scp loop
     if args.scpFiles:
       scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
@@ -101,6 +102,9 @@ def setup_outputDir(args):
     #TODO: add 'quiet' option
     print("Storing output at '{}'".format(args.outputDir), file=sys.stderr)
 
+  if getattr(args, 'outputLog', None) is None:
+    args.outputLog = os.path.join(args.outputDir, "ssh_output.txt")
+
   # set errorLog path (if not set already)
   if getattr(args, 'errorLog', None) is None:
     args.errorLog = os.path.join(args.outputDir, "error.log")
@@ -111,7 +115,6 @@ def setup_outputDir(args):
     raise Exception("'{}' is write restricted".format(args.errorLog))
 
   return args
-
 
 
 def get_args():
@@ -289,7 +292,10 @@ class _update_dict_nargs(ap.Action):
 
 def _valid_port(port):
   #TODO: validate in range
-  return int(port)
+  if port >= 1 and port <= 65535:
+    return int(port)
+  else:
+    raise ap.ArgumentTypeError("Invalid Port {}: out of range".format(port))
 
 
 def load_csv(csvFile):
@@ -340,8 +346,7 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
   attemptLim = 5
   attempt = 1
   while attempt <= attemptLim and not ssh_socket_check_master(socketPath):
-    if _DBG:  #TODO DBG
-      print("DBG open socket: attempt {}/{}".format(attempt, attemptLim), file=sys.stderr)
+    print("Opening SSH Socket: attempt {}/{}".format(attempt, attemptLim), file=sys.stderr)
     retval = sp.run(
         # parameter after 'exit' is irrelevant, but something must be put in this slot
         "expect {} {} {} {} {} {}".format(
@@ -365,10 +370,12 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
     #TODO: log error
     raise Exception("Failed to create multiplex socket. Check ssh settings and try again.")
     #TODO: specify exc?
+  else:
+    print("  ...done", file=sys.stderr)
 
   if _DBG:  #TODO DBG
     print("\nSocket STDOUT:\n", retval.stdout.decode('utf-8'), sep="", file=sys.stderr)
-    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), file=sys.stderr)
+    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), sep="", file=sys.stderr)
   return retval
 
 
@@ -390,8 +397,7 @@ def ssh_socket_close_master(socketPath):
   attemptLim = 5
   attempt = 1
   while attempt <= attemptLim and ssh_socket_check_master(socketPath):
-    if _DBG:  #TODO DBG
-      print("DBG close socket: attempt {}/{}".format(attempt, attemptLim), file=sys.stderr)
+    print("Closing SSH Socket: attempt {}/{}".format(attempt, attemptLim), file=sys.stderr)
     retval = sp.run(
         # parameter after 'exit' is irrelevant, but something must be put in this slot
         "ssh -S {} -O exit towel@42".format(socketPath),
@@ -406,10 +412,12 @@ def ssh_socket_close_master(socketPath):
     #TODO: log error
     raise Exception("Failed to close multiplex ssh socket '{}'".format(socketPath))
     #TODO: specify exc?
+  else:
+    print("  ...done", file=sys.stderr)
 
   if _DBG:  #TODO DBG
     print("\nSocket STDOUT:\n", retval.stdout.decode('utf-8'), sep="", file=sys.stderr)
-    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), file=sys.stderr)
+    print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), sep="", file=sys.stderr)
   return retval
 
 
@@ -438,27 +446,34 @@ def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
   return retval
 
 
-def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir, errorLogDir):
+def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputLog, errorLog):
   #TODO: add jsonPath
   for remoteIP, remotePort, remoteUser, remotePW in remoteCreds:
     try:
+      timestamp = time.ctime()
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
       if _DBG:  #TODO DBG
-        print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
+        print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'),
+            sep="", file=sys.stderr)  #TODO DBG
       #TODO: check return, retry
       #else:
       #  raise Exception("DBG something DBG")
       #TODO: cut out extra params
       sshRetval = ssh_session(remoteUser, "localhost", localPort, remotePW, commandStr)
       #TODO: log data & errors (join ip, user, date, data)
-      print("\nSession STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
-          sshRetval.stdout.decode('utf-8'), sep="")  #TODO DBG
-      print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'))  #TODO DBG
+      if _DBG:  #TODO DBG
+        print("\nSession STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
+            sshRetval.stdout.decode('utf-8'), sep="", file=sys.stderr)  #TODO DBG
+        print("\nSession STDERR:\n", sshRetval.stderr.decode('utf-8'),
+            sep="", file=sys.stderr)  #TODO DBG
+      log_ssh_output(outputLog, remoteIP, remoteUser, timestamp,
+          sshRetval.stdout.decode('utf-8'))
     except Exception as e:  #TODO: specify & define response
-      pass
+      log_error(errorLog, remoteIP, remoteUser, timestamp, e.__repr__())
+      #TODO: e.__repr__ is clumsy, better solution needed
+      #TODO: check retval for error logging
     finally:
       retval = ssh_socket_forward("cancel", socketPath, localPort, remoteIP, remotePort)
-    #TODO: check return, retry
 
 
 def ssh_session(user, ip, port, password, commandStr):
@@ -475,6 +490,22 @@ def ssh_session(user, ip, port, password, commandStr):
       stdout=sp.PIPE,
       stderr=sp.PIPE)
   return retval
+
+
+def log_ssh_output(outputLog, ip, user, timestamp, data):
+  #TODO: lock file if changed to threads
+  writeStr = "\n".join(["### SSH SESSION HEADER ###", ip, user, timestamp, data, "\n\n"])
+  with open(outputLog, 'a') as fp:
+    written = fp.write(writeStr)
+  return written
+
+
+def log_error(errorLog, ip, user, timestamp, error):
+  #TODO: lock file if changed to threads
+  writeStr = "\n".join(["{} : {} : {}".format(timestamp, ip, user), error, "\n"])
+  with open(errorLog, 'a') as fp:
+    written = fp.write(writeStr)
+  return written
 
 
 def tunneled_scp_loop(socketPath, localPort, remoteCreds, fileLst, outputDir, errorLogDir):
