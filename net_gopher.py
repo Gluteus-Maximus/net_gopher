@@ -14,12 +14,14 @@ import copy as _copy
 
 #TODO: capture output from scripts
 #TODO: initialize template files (creds)
+#TODO: add indexed start (for failed/disconnected sessions)
 
-__DBG = True  #TODO DBG
+_DBG = True  #TODO DBG
 
 # Global Filepaths
 fileDir =             os.path.dirname(os.path.realpath(__file__))
-defaultOutputDir =    os.path.join(fileDir, "output/", time.strftime("%Y-%m-%d_%H%M%S"))
+userDir =             os.path.join(fileDir, "user/")
+defaultOutputDir =    os.path.join(userDir, "output/", time.strftime("%Y-%m-%d_%H%M%S"))
 #errorLogDir =         os.path.join(fileDir, "log/")
 #errorLogPath =        os.path.join(errorLogDir, "gopher.log")
 scriptsDir =          os.path.join(fileDir, "expect/")
@@ -27,6 +29,7 @@ sshMasterScriptPath = os.path.join(scriptsDir, "ssh-socket-open-master.exp")
 forwarderScriptPath = os.path.join(scriptsDir, "port-forward.exp")
 sshScriptPath =       os.path.join(scriptsDir, "ssh-session.exp")
 scpScriptPath =       os.path.join(scriptsDir, "scp-session.exp")
+socketPath = os.path.join(fileDir, ".gopher_socket_{}".format(time.strftime("%Y%m%d%H%M%S")))
 
 
 #TODO
@@ -39,30 +42,21 @@ __all__ = [
 
 def main():
   args = get_args()
-  if __DBG: print(args) #TODO DBG
-  #TODO: mkdir from dtg
-  #TODO: store raw log
-  #TODO: store json
-  #TODO: mkdir for each ip (if scpFiles??)
-  #TODO: store errors
-
-  # setup output directory
-  if args.outputDir is None:
-    pass
-    # args.outputDir = defaultDir
-    # check defaultDir
-      # create defaultDir
-    # create childDir (date/time)
-  # print("Storing output at '{}'", file=sys.stderr)
-
-  errorLogPath = os.path.join(args.outputDir, "error.log")
-  # create file or check write priv. on logfile
-
-  # unpack gateCreds from file
-  gateIP, gatePort, gateUser, gatePW = next(load_csv(args.gateCreds))
-  socketPath = os.path.join(fileDir, ".gopher_socket_{}".format(time.strftime("%Y%m%d%H%M%S")))
-
   try:
+    args = setup_outputDir(args)
+    global _DBG
+    _DBG = args.DEBUG  #TODO: temp - pass args to functions, check DEBUG from there? pass DEBUG?
+    if _DBG: print(args, file=sys.stderr) #TODO DBG
+    #TODO: mkdir from dtg
+    #TODO: store raw log
+    #TODO: store json
+    #TODO: mkdir for each ip (if scpFiles??)
+    #TODO: store errors
+
+
+    # unpack gateCreds from file
+    gateIP, gatePort, gateUser, gatePW = next(load_csv(args.gateCreds))
+
     # open master ssh socket
     retval = ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW)
     # call script loop
@@ -70,19 +64,54 @@ def main():
       commandStr = ingest_commands(args.bashScripts, args.formatters)
       remoteCreds = load_csv(args.remoteCreds)
       tunneled_ssh_loop(socketPath, args.localport, remoteCreds, commandStr,
-          args.outputDir, "DBG")  #TODO: error log filepath
+          args.outputDir, args.errorLog)  #TODO: error log filepath
     # call file scp loop
     if args.scpFiles:
       scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
   except Exception as e:  #TODO: specify
-    print(e, file=sys.stderr)
-    print("\n\n"); raise e #TODO DBG
+    print("ERROR: {}".format(e), file=sys.stderr)
+    if _DBG: #TODO DBG
+      print("\n"); raise e
   finally:
     # close master ssh socket
     try:
       retval = ssh_socket_close_master(socketPath)
+    except UnboundLocalError:
+      pass
     except Exception as e:
-      print(e, file=sys.stderr)
+      print("ERROR: {}".format(e), file=sys.stderr)
+      if _DBG: #TODO DBG
+        print("\n"); raise e
+
+
+def setup_outputDir(args):
+  # setup output directory
+  if getattr(args, 'outputDir', None) is None:
+    args.outputDir = defaultOutputDir
+    # if 'output' dir has been deleted or moved, mkdir
+    if not os.path.isdir(os.path.dirname(args.outputDir)):
+      os.mkdir(os.path.dirname(args.outputDir))
+    # check if 'output' dir is writeable
+    if not os.access(os.path.dirname(args.outputDir), os.W_OK):  #TODO: specify exc
+      raise Exception("'{}' is not a writeable directory".format(os.path.dirname(args.outputDir)))
+    #create default outputDir
+    if not os.path.exists(args.outputDir):
+      os.mkdir(args.outputDir)
+    #TODO: check if output files exist/W_OK??
+    #TODO: add 'quiet' option
+    print("Storing output at '{}'".format(args.outputDir), file=sys.stderr)
+
+  # set errorLog path (if not set already)
+  if getattr(args, 'errorLog', None) is None:
+    args.errorLog = os.path.join(args.outputDir, "error.log")
+  # check if errorLog is writeable
+  if not os.path.exists(args.errorLog):
+    pass
+  elif not os.access(args.errorLog, os.W_OK):  #TODO: specify exc
+    raise Exception("'{}' is write restricted".format(args.errorLog))
+
+  return args
+
 
 
 def get_args():
@@ -92,12 +121,14 @@ def get_args():
   #d.update(command_line_args)
   #ChainMap
   parser = ap.ArgumentParser()  #TODO: add desc
+  # Hidden 'DEBUG' option, displays debug messages to terminal (stderr)
+  parser.add_argument('--DEBUG', action='store_true', required=False, help=ap.SUPPRESS)
   parser.add_argument('-g', '--gateCreds', action=_readable_file, required=True)
   parser.add_argument('-r', '--remoteCreds', action=_readable_file, required=True)
   #TODO: required=False, default=defaultOutputDir
   #TODO create if default, else don't? (no default value if not, check if None, mkdir)
   parser.add_argument('-o', '--outputDir', action=_readable_dir, required=False,
-      help="###output help - default is timestamped subdirectory in ./user/output")
+      help="###output help - not required. default is timestamped subdirectory in ./user/output")
   #TODO: check if port in use through _valid_port, or use action _available_port
   parser.add_argument('-p', '--localport', type=_valid_port, required=False,
       default=22222)
@@ -120,40 +151,25 @@ def get_args():
   #TODO: default values for standard key formatters
   return parser.parse_args()
 
-'''
-def _readable_dir_call(self, parser, namespace, values, option_string=None):
-  if not os.path.isdir(values):
-    raise ap.ArgumentError(self, "{0} is not a valid path".format(values))
-  if os.access(values, os.R_OK):
-    setattr(namespace,self.dest,values)
-  else:
-    raise ap.ArgumentError(self, "{0} is not a readable dir".format(values))
-
-
-class _setup_output_dir(ap.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    _readable_dir_call(self, parser, namespace, values, option_string)
-    #
-'''
 
 class _readable_dir(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     if not os.path.isdir(values):
-      raise ap.ArgumentError(self, "{0} is not a valid path".format(values))
+      raise ap.ArgumentError(self, "{} is not a valid path".format(values))
     if os.access(values, os.R_OK):
       setattr(namespace,self.dest,values)
     else:
-      raise ap.ArgumentError(self, "{0} is not a readable dir".format(values))
+      raise ap.ArgumentError(self, "{} is not a readable directory".format(values))
 
 
 class _readable_file(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     if not os.path.isfile(values):
-      raise ap.ArgumentError(self, "{0} is not a valid file".format(values))
+      raise ap.ArgumentError(self, "{} is not a valid file".format(values))
     if os.access(values, os.R_OK):
       setattr(namespace,self.dest,values)
     else:
-      raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
+      raise ap.ArgumentError(self, "{} is not a readable file".format(values))
 
 
 def _DBG_readable_file(filepath):  #TODO DBG - remove
@@ -173,14 +189,14 @@ class _readable_file_append(ap.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     def _check_append(self, parser, namespace, values, option_string=None):
       if not os.path.isfile(values):
-        raise ap.ArgumentError(self, "{0} is not a valid file".format(values))
+        raise ap.ArgumentError(self, "{} is not a valid file".format(values))
       if os.access(values, os.R_OK):
         # likely exception if 'dest' holds something other than a list
         items = _copy.copy(_ensure_value(namespace, self.dest, []))
         items.append(values)
         setattr(namespace, self.dest, items)
       else:
-        raise ap.ArgumentError(self, "{0} is not a readable file".format(values))
+        raise ap.ArgumentError(self, "{} is not a readable file".format(values))
     if isinstance(values, list):
       for item in values:
         _check_append(self, parser, namespace, item, option_string=None)
@@ -324,7 +340,7 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
   attemptLim = 5
   attempt = 1
   while attempt <= attemptLim and not ssh_socket_check_master(socketPath):
-    if __DBG:  #TODO DBG
+    if _DBG:  #TODO DBG
       print("DBG open socket: attempt {}/{}".format(attempt, attemptLim), file=sys.stderr)
     retval = sp.run(
         # parameter after 'exit' is irrelevant, but something must be put in this slot
@@ -347,10 +363,10 @@ def ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW):
   # raise exception if fails to create socket
   if not ssh_socket_check_master(socketPath):
     #TODO: log error
-    raise Exception("ERROR: Failed to create multiplex socket. Check ssh settings and try again.")
+    raise Exception("Failed to create multiplex socket. Check ssh settings and try again.")
     #TODO: specify exc?
 
-  if __DBG:  #TODO DBG
+  if _DBG:  #TODO DBG
     print("\nSocket STDOUT:\n", retval.stdout.decode('utf-8'), sep="", file=sys.stderr)
     print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), file=sys.stderr)
   return retval
@@ -374,7 +390,7 @@ def ssh_socket_close_master(socketPath):
   attemptLim = 5
   attempt = 1
   while attempt <= attemptLim and ssh_socket_check_master(socketPath):
-    if __DBG:  #TODO DBG
+    if _DBG:  #TODO DBG
       print("DBG close socket: attempt {}/{}".format(attempt, attemptLim), file=sys.stderr)
     retval = sp.run(
         # parameter after 'exit' is irrelevant, but something must be put in this slot
@@ -388,10 +404,10 @@ def ssh_socket_close_master(socketPath):
   # raise exception if fails to close socket
   if ssh_socket_check_master(socketPath):
     #TODO: log error
-    raise Exception("ERROR: Failed to close multiplex ssh socket '{}'".format(socketPath))
+    raise Exception("Failed to close multiplex ssh socket '{}'".format(socketPath))
     #TODO: specify exc?
 
-  if __DBG:  #TODO DBG
+  if _DBG:  #TODO DBG
     print("\nSocket STDOUT:\n", retval.stdout.decode('utf-8'), sep="", file=sys.stderr)
     print("\nSocket STDERR:\n", retval.stderr.decode('utf-8'), file=sys.stderr)
   return retval
@@ -405,7 +421,7 @@ _sshSocketForwardFormatStr = "ssh -S {} -O {} {} -L localhost:{}:{}:{} towel@42 
 
 def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
   assert action in ["forward", "cancel"], \
-      "ERROR: ssh_socket_forward: action parameter must be in [\"forward\", \"cancel\"]"
+      "ssh_socket_forward: action parameter must be in [\"forward\", \"cancel\"]"
   retval = sp.run(
       _sshSocketForwardFormatStr.format(
         socketPath,
@@ -427,7 +443,7 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputDir,
   for remoteIP, remotePort, remoteUser, remotePW in remoteCreds:
     try:
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
-      if __DBG:  #TODO DBG
+      if _DBG:  #TODO DBG
         print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'))  #TODO DBG
       #TODO: check return, retry
       #else:
