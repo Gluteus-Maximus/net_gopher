@@ -60,15 +60,19 @@ def main():
 
     # open master ssh socket
     retval = ssh_socket_open_master(socketPath, gateIP, gatePort, gateUser, gatePW)
-    # call script loop
+    # bash script loop
     if args.bashScripts:
       commandStr = ingest_commands(args.bashScripts, args.formatters)
       remoteCreds = load_csv(args.remoteCreds)
       tunneled_ssh_loop(socketPath, args.localport, remoteCreds, commandStr,
-          args.outputLog, args.errorLog)  #TODO: error log filepath
-    # call file scp loop
+          args.outputLog, args.errorLog)
+    # file scp loop
     if args.scpFiles:
-      scpFiles = load_csv(args.scpFiles) #TODO: may cause issues with iter instead of list
+      scpFiles = load_csv(args.scpFiles)
+      remoteCreds = load_csv(args.remoteCreds)
+      tunneled_scp_loop(socketPath, args.localport, remoteCreds,
+          " ".join([f[0] for f in list(scpFiles)]),
+          args.outputDir, args.errorLog)  #TODO: error log filepath
   except Exception as e:  #TODO: specify
     print("ERROR: {}".format(e), file=sys.stderr)
     if _DBG: #TODO DBG
@@ -513,11 +517,36 @@ def log_error(errorLog, ip, user, timestamp, error):
   return written
 
 
-def tunneled_scp_loop(socketPath, localPort, remoteCreds, fileLst, outputDir, errorLogDir):
+def tunneled_scp_loop(socketPath, localPort, remoteCreds, filesStr, outputDir, errorLog):
   #TODO: log errors
   #files = list(csv_load)  # will be list of lists
   # for stuff in remoteCreds: forward, scp files, cancel
-  pass
+  for remoteIP, remotePort, remoteUser, remotePW in remoteCreds:
+    try:
+      timestamp = time.ctime()
+      retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
+      if _DBG:  #TODO DBG
+        print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'),
+            sep="", file=sys.stderr)  #TODO DBG
+      #TODO: check return, retry
+      #else:
+      #  raise Exception("DBG something DBG")
+      #TODO: cut out extra params
+      print("DBG: {}".format(filesStr))
+      fileDir = ensure_dir(outputDir, remoteIP)
+      scpRetval = scp_session(remoteUser, "localhost", localPort, remotePW, filesStr, fileDir)
+      #TODO: log data & errors (join ip, user, date, data)
+      if _DBG:  #TODO DBG
+        print("\nSCP STDOUT:\n", "{}@{}\n".format(remoteUser, remoteIP),
+            scpRetval.stdout.decode('utf-8'), sep="", file=sys.stderr)  #TODO DBG
+        print("\nSCP STDERR:\n", scpRetval.stderr.decode('utf-8'),
+            sep="", file=sys.stderr)  #TODO DBG
+    except Exception as e:  #TODO: specify & define response
+      log_error(errorLog, remoteIP, remoteUser, timestamp, e.__repr__())
+      #TODO: e.__repr__ is clumsy, better solution needed
+      #TODO: check retval for error logging
+    finally:
+      retval = ssh_socket_forward("cancel", socketPath, localPort, remoteIP, remotePort)
 
 
 def ensure_dir(parentDir, childDir):
