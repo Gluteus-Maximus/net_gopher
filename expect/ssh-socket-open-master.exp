@@ -11,7 +11,8 @@ set password    [lindex $argv 3]
 set ssh_socket  [lindex $argv 4]
 
 log_user 0
-spawn -ignore HUP ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -M -S $ssh_socket $user@$ip -p $ssh_port -fN
+spawn -ignore HUP ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  -M -S $ssh_socket $user@$ip -p $ssh_port -fN
 # Call bash script as absolute path, relative to this script (same directory)
 #set script_dir	[file normalize [file dirname $argv0]]
 #spawn bash $script_dir/ssh-socket-open-master.sh $ip $ssh_port $user $ssh_socket

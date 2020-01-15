@@ -13,8 +13,8 @@ set begin_msg	"### COMMAND EXECUTION BEGIN ###"
 set done_msg	"### COMMAND EXECUTION COMPLETE ###"
 
 log_user 0
-spawn ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$ip -p $port \
-"echo '$begin_msg';$commands;echo '$done_msg'"
+spawn ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  $user@$ip -p $port "echo '$begin_msg';$commands;echo '$done_msg'"
 expect -nocase "password: "
 # handle ssh-key
 send -h "$password\r"
