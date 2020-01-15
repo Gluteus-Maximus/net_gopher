@@ -292,10 +292,11 @@ class _update_dict_nargs(ap.Action):
 
 def _valid_port(port):
   #TODO: validate in range
+  port = int(port)
   if port >= 1 and port <= 65535:
-    return int(port)
+    return port
   else:
-    raise ap.ArgumentTypeError("Invalid Port {}: out of range".format(port))
+    raise ap.ArgumentTypeError("invalid port {}: out of range".format(port))
 
 
 def load_csv(csvFile):
@@ -500,6 +501,10 @@ def log_ssh_output(outputLog, ip, user, timestamp, data):
   return written
 
 
+def log_ssh_output_json():
+  pass
+
+
 def log_error(errorLog, ip, user, timestamp, error):
   #TODO: lock file if changed to threads
   writeStr = "\n".join(["{} : {} : {}".format(timestamp, ip, user), error, "\n"])
@@ -515,8 +520,18 @@ def tunneled_scp_loop(socketPath, localPort, remoteCreds, fileLst, outputDir, er
   pass
 
 
-def scp_session():
-  '''
+def ensure_dir(parentDir, childDir):
+  prospectiveDir = os.path.join(parentDir, childDir)
+  if not os.path.exists(prospectiveDir):
+    os.mkdir(prospectiveDir)
+  elif not os.path.isdir(values):
+    raise Exception(self, "{} is not a valid directory".format(prospectiveDir))
+  if not os.access(prospectiveDir, os.R_OK):
+    raise PermissionError("{} is not a writeable directory".format(prospectiveDir))
+  return prospectiveDir
+
+
+def scp_session(user, ip, port, password, scpFiles, localDir):
   retval = sp.run(
       "expect {} {} {} {} {} {}".format(
         scpScriptPath,
