@@ -533,29 +533,19 @@ def ensure_dir(parentDir, childDir):
 
 def scp_session(user, ip, port, password, scpFiles, localDir):
   retval = sp.run(
-      "expect {} {} {} {} {} {}".format(
+      "expect {} {} {} {} {} {} {}".format(
         scpScriptPath,
-        ,
-        ,
-        ,
-        ,
-        ,
+        user,
+        ip,
+        port,
+        password,
+        '"{}"'.format(scpFiles),
+        '"{}"'.format(localDir)
         ),
       shell=True,
       stdout=sp.PIPE,
       stderr=sp.PIPE)
-  #TODO: check retval.returncode, log failure
-  '''
-  pass
-
-
-def log_session_data_text(ip, user, data, timestamp, logfilePath):
-  with open(logfilePath, 'a') as fp:
-    pass
-
-
-def log_session_data_json():
-  pass
+  return retval
 
 
 if __name__ == "__main__":
