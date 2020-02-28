@@ -15,6 +15,7 @@ import copy as _copy
 #TODO: capture output from scripts
 #TODO: initialize template files (creds)
 #TODO: add indexed start (for failed/disconnected sessions)
+#TODO: handle malformed csv lines
 
 _DBG = True  #TODO DBG
 
@@ -428,13 +429,13 @@ def ssh_socket_close_master(socketPath):
 
 # ssh command strings
 _sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-# parameter after forwarder settings is irrelevant, but something must be put in this slot
-_sshSocketForwardFormatStr = "ssh -S {} -O {} {} -L localhost:{}:{}:{} towel@42 -fN"
 
 
 def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
   assert action in ["forward", "cancel"], \
       "ssh_socket_forward: action parameter must be in [\"forward\", \"cancel\"]"
+  # parameter after forwarder settings is irrelevant, but something must be put in this slot
+  _sshSocketForwardFormatStr = "ssh -S {} -O {} {} -L localhost:{}:{}:{} towel@42 -fN"
   retval = sp.run(
       _sshSocketForwardFormatStr.format(
         socketPath,
@@ -448,6 +449,14 @@ def ssh_socket_forward(action, socketPath, localPort, remoteIP, remotePort):
       stdout=sp.PIPE,
       stderr=sp.PIPE
       )
+  if retval.returncode != 0:
+    if action == "forward":
+      print("Failed to open forwarder from port {}, it may be in use.".format(localPort),
+          file=sys.stderr)
+      raise Exception(
+          "Failed to open forwarder from local port {} (ssh return: {})".format(
+            localPort,
+            retval.returncode))
   return retval
 
 
@@ -458,8 +467,11 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputLog,
       timestamp = time.ctime()
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
       if _DBG:  #TODO DBG
+        print("\nForwarder STDOUT:\n", retval.stdout.decode('utf-8'),
+            sep="", file=sys.stderr)  #TODO DBG
         print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'),
             sep="", file=sys.stderr)  #TODO DBG
+        print("Forwarder return: {}".format(retval.returncode), file=sys.stderr)  #TODO DBG
       #TODO: check return, retry
       #else:
       #  raise Exception("DBG something DBG")
@@ -483,13 +495,13 @@ def tunneled_ssh_loop(socketPath, localPort, remoteCreds, commandStr, outputLog,
 
 def ssh_session(user, ip, port, password, commandStr):
   retval = sp.run(
-      "expect {} {} {} {} {} {}".format(
+      "expect {} {} {} {} {} \"{}\"".format(
         sshScriptPath,
         user,
         ip,
         port,
         password,
-        '"{}"'.format(commandStr)
+        "{}".format(commandStr)
         ),
       shell=True,
       stdout=sp.PIPE,
@@ -526,6 +538,8 @@ def tunneled_scp_loop(socketPath, localPort, remoteCreds, filesStr, outputDir, e
       timestamp = time.ctime()
       retval = ssh_socket_forward("forward", socketPath, localPort, remoteIP, remotePort)
       if _DBG:  #TODO DBG
+        print("\nForwarder STDOUT:\n", retval.stdout.decode('utf-8'),
+            sep="", file=sys.stderr)  #TODO DBG
         print("\nForwarder STDERR:\n", retval.stderr.decode('utf-8'),
             sep="", file=sys.stderr)  #TODO DBG
       #TODO: check return, retry
@@ -562,14 +576,14 @@ def ensure_dir(parentDir, childDir):
 
 def scp_session(user, ip, port, password, scpFiles, localDir):
   retval = sp.run(
-      "expect {} {} {} {} {} {} {}".format(
+      "expect {} {} {} {} {} \"{}\" \"{}\"".format(
         scpScriptPath,
         user,
         ip,
         port,
         password,
-        '"{}"'.format(scpFiles),
-        '"{}"'.format(localDir)
+        "{}".format(scpFiles),
+        "{}".format(localDir)
         ),
       shell=True,
       stdout=sp.PIPE,

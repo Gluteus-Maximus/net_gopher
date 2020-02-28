@@ -10,12 +10,13 @@ set port      [lindex $argv 2]
 set password  [lindex $argv 3]
 set files     [lindex $argv 4]
 set local_dir [lindex $argv 5]
+set done_msg  "### done"
 
-log_user 0
-spawn scp -r -P $port -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-  $user@$ip:"$files" $local_dir
-expect -nocase "password: "
+#log_user 0
+spawn bash -c "scp -r -P $port -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$ip:\"$files\" $local_dir && echo $done_msg"
+expect -nocase "password:"
 # handle ssh-key
 send -h "$password\r"
 log_user 1
-exit
+expect $done_msg
+#exit
